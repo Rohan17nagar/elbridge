@@ -33,24 +33,22 @@ def partition(G, k):
 
   components = nx.connected_components(mst)
 
+  partition = nx.Graph()
+
   for component in components:
-    # component is a set of nodes in each component
-    for pair in permutations(component, r=2):
-      # if two vertices in the same component shared an edge in G, restore that edge
-      if pair in G.edges():
-        mst.add_edge(*pair)
+    subgraph = G.subgraph(component)
+    partition.add_nodes_from(subgraph.nodes())
+    partition.add_edges_from(subgraph.edges())
 
-  original_edge_set = set(G.edges())
-  new_edge_set = set(mst.edges())
-  hypotheticals = original_edge_set - new_edge_set
+  hypotheticals = set([(u,v) for (u,v) in G.edges() if not partition.has_edge(u,v) and not partition.has_edge(v,u)])
 
-  return mst, hypotheticals
+  return partition, hypotheticals
 
 def main():
-  G = nx.path_graph(10)
+  G = nx.cycle_graph(10)
   Gp, cutset = partition(G, 3)
-  nx.draw_networkx(Gp)
-  plt.show()
+  # nx.draw_networkx(Gp)
+  # plt.show()
 
 if __name__ == '__main__':
   main()
