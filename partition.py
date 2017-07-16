@@ -37,10 +37,11 @@ def partition(G, k):
 
   for component in components:
     subgraph = G.subgraph(component)
-    partition.add_nodes_from(subgraph.nodes())
-    partition.add_edges_from(subgraph.edges())
+    partition.add_nodes_from(subgraph.nodes(data=True))
+    partition.add_edges_from(subgraph.edges(data=True))
 
-  hypotheticals = set([(u,v) for (u,v) in G.edges() if not partition.has_edge(u,v) and not partition.has_edge(v,u)])
+  hypotheticals = [(u,v,data) for (u,v,data) in G.edges(data=True)
+    if not partition.has_edge(u,v) and not partition.has_edge(v,u)]
 
   return partition, hypotheticals
 

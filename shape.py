@@ -2,8 +2,9 @@
 Tools for reading in shapefiles and creating networkx graphs.
 """
 # imports for shapefiles
-from shapely.geometry import shape, Point
+from shapely.geometry import shape, Point, MultiLineString
 from shapely.affinity import translate
+from shapely.ops import cascaded_union
 import fiona
 import descartes
 
@@ -24,10 +25,10 @@ def plot_objects(objects, random_color=False, centroids=False, explode=False):
   fig = plt.figure()
   ax = fig.add_subplot(111)
 
-  min_x = 1000000000
-  min_y = 1000000000
-  max_x = -1000000000
-  max_y = -1000000000
+  min_x = float('inf')
+  min_y = float('inf')
+  max_x = float('-inf')
+  max_y = float('-inf')
 
   if centroids:
     centroids = []
@@ -77,7 +78,7 @@ def plot_objects(objects, random_color=False, centroids=False, explode=False):
   ax.set_aspect(1)
   plt.show(fig)
 
-# Converts a shapefile located at indir/infile to a networkx graph.
+# Converts a shapefile located at indir/infile.shp to a networkx graph.
 # If draw_graph is set to True, the graph is drawn using matplotlib.
 def create_graph(indir, infile, draw_shapefile=False, draw_graph=False, pickle=False):
   G = nx.Graph()
@@ -122,7 +123,10 @@ def create_graph(indir, infile, draw_shapefile=False, draw_graph=False, pickle=F
       other = o[1]['block']
       if state is not other and state.touches(other):
         has_connection = True
-        G.add_edge(n[0], o[0])
+        border = state.intersection(other)
+        assert isinstance(border, MultiLineString) or isinstance(border, Point), \
+          "border ({}, {}) is of type {}".format(n[0], o[0], type(border))
+        G.add_edge(n[0], o[0], border=border.length)
 
     if not has_connection:
       # connect it to the closest object
@@ -136,7 +140,7 @@ def create_graph(indir, infile, draw_shapefile=False, draw_graph=False, pickle=F
           closest = node
           dist = d
 
-      G.add_edge(n[0], closest[0])
+      G.add_edge(n[0], closest[0], border=0.0)
 
   if draw_graph:
     pos = { n[0] : [n[1]['block'].centroid.x, n[1]['block'].centroid.y] for n in G.nodes(data=True) }
