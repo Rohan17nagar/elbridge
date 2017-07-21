@@ -4,8 +4,10 @@
 
 Pull this repo:
 
-```git clone git@github.com:rohan/gerrymander.git
-cd gerrymander/```
+```
+git clone git@github.com:rohan/gerrymander.git
+cd gerrymander/
+```
 
 Now, you'll need to create a data directory for your shapefiles. In this example, we'll use the Census Bureau's shapefiles for the 50 states. (You can download it at [the Census Bureau website](https://www.census.gov/cgi-bin/geo/shapefiles/index.php?year=2016&layergroup=States+%28and+equivalent%29).) Download and unzip into a folder called `data/state_shapes`, then rename all of the files to `state_shapes.xxx` (where `xxx` is the file extension, for example `state_shapes.shp`).
 
