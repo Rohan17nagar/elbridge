@@ -1,28 +1,11 @@
 import networkx as nx
-from itertools import permutations
-import matplotlib.pyplot as plt
+
+from utils import random_subset
 
 # create a spanning tree
 # choose k-1 random edges
 # remove
 # recreate subgraphs
-
-# pick k random elements of set
-import random
-def random_subset(iterator, K):
-  result = []
-  N = 0
-
-  for item in iterator:
-    N += 1
-    if len( result ) < K:
-      result.append( item )
-    else:
-      s = int(random.random() * N)
-      if s < K:
-        result[ s ] = item
-
-  return result
 
 # partition an input graph into k connected components
 # return (new graph, hypothetical edges)
@@ -32,6 +15,8 @@ def partition(G, k):
   mst.remove_edges_from(cut)
 
   components = nx.connected_components(mst)
+  num_comps = nx.number_connected_components(mst)
+  assert num_comps == k
 
   partition = nx.Graph()
 
@@ -41,15 +26,20 @@ def partition(G, k):
     partition.add_edges_from(subgraph.edges(data=True))
 
   hypotheticals = [(u,v,data) for (u,v,data) in G.edges(data=True)
-    if not partition.has_edge(u,v) and not partition.has_edge(v,u)]
+    if not partition.has_edge(u,v)]
 
   return partition, hypotheticals
 
-def main():
+def test():
   G = nx.cycle_graph(10)
   Gp, cutset = partition(G, 3)
-  # nx.draw_networkx(Gp)
-  # plt.show()
+
+  expected_cutset = [(i, (i+1) % 10, {}) for i in range(10) if not Gp.has_edge(i,(i+1) % 10)]
+  try:
+    assert cutset == expected_cutset
+  except AssertionError:
+    print("found", cutset)
+    print("expected", expected_cutset)
 
 if __name__ == '__main__':
-  main()
+  test()

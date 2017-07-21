@@ -9,7 +9,6 @@ import fiona
 import descartes
 
 import random
-from random import randint
 
 # imports for graphs
 import networkx as nx
