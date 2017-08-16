@@ -83,11 +83,13 @@ def differential(new_scores, cur_scores):
   total = 0
 
   for diff in diffs:
-    if diff < 0:
-      return -1
+    # if diff < 0:
+    #   return -1
     total += diff
 
   return total
+
+  # return sum(diffs)
 
 
 def draw_state(state, title=""):
@@ -135,10 +137,13 @@ def find_maximum(S, steps=100, draw_steps=False, draw_final=False):
 def find_frontier(G, k, samples=100):
   frontier = []
   for t0 in tqdm(range(samples), desc="Hill-climbing"):
-    start = State(*partition.partition(G, k), k)
-    end = find_maximum(start)
+    try:
+      start = State(*partition.partition(G, k), k)
+      end = find_maximum(start)
 
-    frontier.append(end)
+      frontier.append(end)
+    except KeyboardInterrupt:
+      break
 
   filtered_frontier = []
   for A in frontier:
@@ -152,8 +157,22 @@ def find_frontier(G, k, samples=100):
     if not found:
       filtered_frontier.append(A)
 
-  scores = [state.score for state in filtered_frontier]
-  plt.plot(*zip(*scores), 'ro')
+  best_scores = [state.score for state in frontier if state in filtered_frontier]
+  other_scores = [state.score for state in frontier if state not in filtered_frontier]
+
+  print("frontier:", best_scores)
+  print("others:", other_scores)
+
+  plt.hold(True)
+  fig = plt.figure()
+  ax = fig.add_subplot(111)
+  plt.scatter(*zip(*best_scores), c='red')
+  plt.scatter(*zip(*other_scores), c='grey')
+
+  # for score in best_scores:
+  #   ax.annotate('({:.2f}, {:.2f})'.format(*score), xy=score, textcoords='data')
+
+  # plt.grid()
   plt.show()
 
   # BELOW CODE: draws best partition when one exists; assumes shapefile graph

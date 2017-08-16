@@ -10,7 +10,7 @@ import time
 # output: score
 # goal should *always* be to maximize
 
-WEIGHTS = [1, 0]
+WEIGHTS = [0.999, 0.001]
 
 # takes a graph G = (V,E)
 # let N = |V|, V1...Vd be the connected components
