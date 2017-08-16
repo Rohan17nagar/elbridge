@@ -1,0 +1,6 @@
+tqdm
+networkx
+shapely
+matplotlib
+fiona
+descartes
