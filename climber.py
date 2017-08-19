@@ -45,7 +45,7 @@ class State():
     best_edge = None
     best_gradient = 0
 
-    pool = PPool()
+    # pool = PPool()
     grads = []
 
     # for x in tqdm(pool.map(self.evaluate_neighbor, self.hypotheticals)):
@@ -54,8 +54,8 @@ class State():
     # for x in tqdm(pool.map(self.evaluate_neighbor, [(j, i, d) for (i, j, d) in self.hypotheticals])):
     #   grads.append(x)
 
-    grads += pool.map(self.evaluate_neighbor, self.hypotheticals)
-    grads += pool.map(self.evaluate_neighbor, [(j, i, d) for (i, j, d) in self.hypotheticals])
+    grads += map(self.evaluate_neighbor, self.hypotheticals)
+    grads += map(self.evaluate_neighbor, [(j, i, d) for (i, j, d) in self.hypotheticals])
 
     best_grad = max(grads, key=lambda x: x[5])
 
@@ -186,8 +186,8 @@ def find_frontier(G, k, samples=100):
   best_scores = [state.score for state in frontier if state in filtered_frontier]
   other_scores = [state.score for state in frontier if state not in filtered_frontier]
 
-  print("frontier:", best_scores)
-  print("others:", other_scores)
+  # print("frontier:", best_scores)
+  # print("others:", other_scores)
 
   plt.hold(True)
   fig = plt.figure()
