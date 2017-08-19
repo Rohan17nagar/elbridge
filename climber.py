@@ -22,6 +22,7 @@ class State():
     self.score = score if score is not None else scorer.score(self)
 
   def evaluate_neighbor(self, args):
+    logging.info("evaluating edge " + args)
     u, v, data = args
     v_neighbors = self.G.edges(v, data=True)
 
@@ -164,10 +165,13 @@ def call_find_max(data):
 
 # Given a graph G, approximate the Pareto frontier with {samples} starting points.
 def find_frontier(G, k, samples=100):
+  logging.info("initializing thread pool for samples")
   pool = TPool() # pool for partition generation
   # frontier = []
   # for x in tqdm(pool.map(call_find_max, [(G, k)] * samples), desc="Starting..."):
   #   frontier.append(x)
+
+  logging.info("finished creating pool")
 
   frontier = pool.map(call_find_max, [(G, k)] * samples)
 
