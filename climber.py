@@ -135,6 +135,8 @@ def find_maximum(S, steps=100, draw_steps=False, draw_final=False):
         draw_state(cur_state, title="Final graph (score {score} after {steps} steps"
           .format(score=cur_state.score, steps=t0 + 1))
 
+      print(threading.get_ident(), "returning", cur_state.score)
+
       return cur_state
 
     cur_state = best_neighbor
