@@ -6,7 +6,10 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
+from pathos.multiprocessing import ThreadingPool as TPool, ProcessingPool as PPool
 import time
+
+import threading
 
 """
 Encapsulates a state, which consists of a partition and the set of hypothetical edges in that partition.
@@ -18,48 +21,60 @@ class State():
     self.k = k
     self.score = score if score is not None else scorer.score(self)
 
-  def best_neighbor(self):
-    cur_score = scorer.score(self)
+  def evaluate_neighbor(self, args):
+    u, v, data = args
+    v_neighbors = self.G.edges(v, data=True)
 
+    self.G.remove_edges_from(v_neighbors)
+    self.G.add_edge(u, v, data)
+
+    if nx.number_connected_components(self.G) == self.k:
+      n_score = scorer.score(self)
+      n_gradient = differential(n_score, self.score)
+
+      self.G.remove_edge(u, v)
+      self.G.add_edges_from(v_neighbors)
+
+      return u, v, data, v_neighbors, n_score, n_gradient
+    else:
+      return u, v, data, v_neighbors, -1, -1
+
+  def best_neighbor(self):
     best_score = None
     best_cut = None
     best_edge = None
     best_gradient = 0
 
-    for (i,j,d) in self.hypotheticals:
-    # for (i, j, d) in tqdm(self.hypotheticals, desc="Evaluating neighbors"):
-      for u, v, data in [(i,j,d), (j,i,d)]:
-        v_neighbors = self.G.edges(v, data=True)
+    pool = PPool()
+    grads = []
 
-        self.G.remove_edges_from(v_neighbors)
-        self.G.add_edge(u, v, data)
+    # for x in tqdm(pool.map(self.evaluate_neighbor, self.hypotheticals)):
+    #   grads.append(x)
 
-        if nx.number_connected_components(self.G) == self.k:
-          n_score = scorer.score(self)
-          n_gradient = differential(n_score, cur_score)
+    # for x in tqdm(pool.map(self.evaluate_neighbor, [(j, i, d) for (i, j, d) in self.hypotheticals])):
+    #   grads.append(x)
 
-          if n_gradient > best_gradient:
-            best_score = n_score
-            best_cut = v_neighbors
-            best_edge = (u,v,data)
-            best_gradient = n_gradient
+    grads += pool.map(self.evaluate_neighbor, self.hypotheticals)
+    grads += pool.map(self.evaluate_neighbor, [(j, i, d) for (i, j, d) in self.hypotheticals])
 
-        self.G.add_edges_from(v_neighbors)
-        self.G.remove_edge(u, v)
+    best_grad = max(grads, key=lambda x: x[5])
 
-    if best_cut is None:
+    i, j, data, best_cut, best_score, grad = best_grad
+    best_edge = (i, j, data)
+
+    if grad <= 0: # no valid (connected or better) neighbor
       return None
 
     Gp = self.G.copy()
     Gp_hyps = self.hypotheticals.copy()
 
     # (i,j) is no longer hypothetical
-    Gp.add_edge(*best_edge)
+    Gp.add_edge(i, j, data)
 
     try:
-      Gp_hyps.remove(best_edge)
+      Gp_hyps.remove((i, j, data))
     except ValueError:
-      Gp_hyps.remove((best_edge[1], best_edge[0], best_edge[2]))
+      Gp_hyps.remove((j, i, data))
 
     # all removed edges from v to its old neighbors are now hypothetical
     for v_edge in best_cut:
@@ -68,10 +83,10 @@ class State():
       Gp_hyps.append(v_edge)
 
     # all edges from nodes in u's component to v are now realized
-    u_component = nx.node_connected_component(self.G, best_edge[0])
+    u_component = nx.node_connected_component(self.G, i)
     for node in u_component:
       for (x, y, data) in Gp_hyps:
-        if (x == node and y == v) or (x == v and y == node):
+        if (x == node and y == j) or (x == j and y == node):
           Gp_hyps.remove((x, y, data))
           Gp.add_edge(x, y, data)
 
@@ -110,7 +125,8 @@ def draw_state(state, title=""):
 def find_maximum(S, steps=100, draw_steps=False, draw_final=False):
   cur_state = S
 
-  for t0 in tqdm(range(steps), desc="Taking steps"):
+  for t0 in range(steps):
+  #for t0 in tqdm(range(steps), desc="Taking steps"):
     best_neighbor = cur_state.best_neighbor()
 
     if best_neighbor is None:
@@ -127,23 +143,28 @@ def find_maximum(S, steps=100, draw_steps=False, draw_final=False):
       draw_state(cur_state, title="New graph (score {score} after {steps} steps"
         .format(score=cur_state.score, steps=t0 + 1))
 
+    print(threading.get_ident(), t0, cur_state.score)
+
   if draw_final:
     draw_state(cur_state, title="Final graph (score {score} after {steps} steps"
       .format(score=cur_state.score, steps=steps))
 
   return cur_state
 
+def call_find_max(data):
+  G, k = data
+  starter = partition.partition(G, k)
+  start = State(*starter)
+  return find_maximum(start)
+
 # Given a graph G, approximate the Pareto frontier with {samples} starting points.
 def find_frontier(G, k, samples=100):
-  frontier = []
-  for t0 in tqdm(range(samples), desc="Hill-climbing"):
-    try:
-      start = State(*partition.partition(G, k), k)
-      end = find_maximum(start)
+  pool = TPool() # pool for partition generation
+  # frontier = []
+  # for x in tqdm(pool.map(call_find_max, [(G, k)] * samples), desc="Starting..."):
+  #   frontier.append(x)
 
-      frontier.append(end)
-    except KeyboardInterrupt:
-      break
+  frontier = pool.map(call_find_max, [(G, k)] * samples)
 
   filtered_frontier = []
   for A in frontier:

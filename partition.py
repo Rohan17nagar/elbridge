@@ -28,7 +28,7 @@ def partition(G, k):
   hypotheticals = [(u,v,data) for (u,v,data) in G.edges(data=True)
     if not partition.has_edge(u,v)]
 
-  return partition, hypotheticals
+  return partition, hypotheticals, k
 
 def test():
   G = nx.cycle_graph(10)

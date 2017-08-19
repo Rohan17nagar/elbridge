@@ -13,8 +13,8 @@ import climber
 def main(log_level=30, samples=100, steps=100,
   data_prefix='data', shape_name='state_shapes', force_reload_graph=False):
   logging.basicConfig(level=log_level,
-    format="[%(levelname)s %(asctime)s] %(filename)s@%(funcname)s [line %(lineno)d]: %(message)s",
-    filename="{}.log".format(datetime.now().isoformat()))
+    format="[%(levelname)s %(asctime)s] %(filename)s@%(funcname)s [line %(lineno)d]: %(message)s")
+    # filename="{}.log".format(datetime.now().isoformat()))
 
   in_dir = os.path.join(data_prefix, shape_name)
 
