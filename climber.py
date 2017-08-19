@@ -24,7 +24,7 @@ class State():
     self.score = score if score is not None else scorer.score(self)
 
   def evaluate_neighbor(self, args):
-    logging.info("evaluating edge " + args)
+    logging.info("evaluating edge", args)
     u, v, data = args
     v_neighbors = self.G.edges(v, data=True)
 
