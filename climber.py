@@ -125,6 +125,8 @@ def draw_state(state, title=""):
 def find_maximum(S, steps=100, draw_steps=False, draw_final=False):
   cur_state = S
 
+  s = time.time()
+
   for t0 in range(steps):
   #for t0 in tqdm(range(steps), desc="Taking steps"):
     best_neighbor = cur_state.best_neighbor()
@@ -135,7 +137,8 @@ def find_maximum(S, steps=100, draw_steps=False, draw_final=False):
         draw_state(cur_state, title="Final graph (score {score} after {steps} steps"
           .format(score=cur_state.score, steps=t0 + 1))
 
-      print(threading.get_ident(), "returning", cur_state.score)
+      e = time.time()
+      print(threading.get_ident(), "returning", cur_state.score, e - s)
 
       return cur_state
 
