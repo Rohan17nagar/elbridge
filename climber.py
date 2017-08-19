@@ -9,6 +9,8 @@ from tqdm import tqdm
 from pathos.multiprocessing import ThreadingPool as TPool, ProcessingPool as PPool
 import time
 
+import logging
+
 import threading
 
 """
