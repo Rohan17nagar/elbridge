@@ -1,14 +1,14 @@
 """
 Tools for reading in shapefiles and creating networkx graphs.
 """
+import os
+import random
+
 # imports for shapefiles
 from shapely.geometry import shape, Point, MultiLineString
-from shapely.affinity import translate
-from shapely.ops import cascaded_union
 import fiona
 import descartes
 
-import random
 
 # imports for graphs
 import networkx as nx
@@ -16,137 +16,140 @@ from matplotlib import pyplot as plt
 
 # utilities
 from utils import cd
-import pprint
-import os
 
-# Plots a collection of shapefiles.
-def plot_objects(objects, random_color=False, centroids=False, explode=False):
-  fig = plt.figure()
-  ax = fig.add_subplot(111)
+def plot_shapes(objects, random_color=False, show_centroids=False):
+    """Plots shapely shapes."""
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
 
-  min_x = float('inf')
-  min_y = float('inf')
-  max_x = float('-inf')
-  max_y = float('-inf')
+    # calculate plot bounds
+    min_x = float('inf')
+    min_y = float('inf')
+    max_x = float('-inf')
+    max_y = float('-inf')
 
-  if centroids:
-    centroids = []
-    areas = []
+    # if show_centroids:
+    #     areas = [obj.area for obj in objects]
+    #     total_area = sum(areas)
+
+    #     x, y = (0, 0)
+        
+    #     for obj in objects:
+    #         x += obj.centroid.x * (float(obj.area) / total_area)
+    #         y += obj.centroid.y * (float(obj.area) / total_area)
 
     for obj in objects:
-      print(obj.centroid)
-      centroids.append(obj.centroid)
-      areas.append(obj.area)
+        if random_color:
+            color = (random.random(), random.random(), random.random())
+            patch = descartes.PolygonPatch(obj, color=color)
+        else:
+            patch = descartes.PolygonPatch(obj)
 
-    x, y = (0, 0)
-    for i in range(len(centroids)):
-      x += centroids[i].x * (float(areas[i]) / sum(areas))
-      y += centroids[i].y * (float(areas[i]) / sum(areas))
+        ax.add_patch(patch)
 
-  if centroids and explode:
-    objs = map(lambda obj: translate(obj, xoff=(obj.centroid.x - x)*0.1, yoff=(obj.centroid.y - y) * 0.1), objects)
-  else:
-    objs = objects
+        if show_centroids:
+            ax.add_patch(descartes.PolygonPatch(obj.centroid.buffer(0.5)))
 
-  for obj in objs:
-    color = (random.random(), random.random(), random.random())
-    if random_color:
-      patch = descartes.PolygonPatch(obj, color=color)
-    else:
-      patch = descartes.PolygonPatch(obj)
+        min_x = min(min_x, obj.bounds[0])
+        min_y = min(min_y, obj.bounds[1])
+        max_x = max(max_x, obj.bounds[2])
+        max_y = max(max_y, obj.bounds[3])
 
-    ax.add_patch(patch)
+    # if show_centroids:
+    #     ax.add_patch(descartes.PolygonPatch(Point(x, y).buffer(1.0)))
 
-    if centroids:
-      if random_color:
-        ax.add_patch(descartes.PolygonPatch(obj.centroid.buffer(0.5)))
-      else:
-        ax.add_patch(descartes.PolygonPatch(obj.centroid.buffer(0.5)))
+    ax.set_xlim(min_x, max_x)
+    ax.set_ylim(min_y, max_y)
 
-    minx, miny, maxx, maxy = obj.bounds
-    min_x = min(min_x, minx)
-    min_y = min(min_y, miny)
-    max_x = max(max_x, maxx)
-    max_y = max(max_y, maxy)
+    ax.set_aspect(1)
+    plt.show(fig)
 
-  if centroids:
-    ax.add_patch(descartes.PolygonPatch(Point(x,y).buffer(1.0)))
+def _connect_graph(G):
+    """Helper function. Connects graph."""
+    for n in G.nodes(data=True):
+        state = n[1]['block']
+        has_connection = False
+        
+        for o in G.nodes(data=True):
+            other = o[1]['block']
+            if state is not other and state.touches(other):
+                has_connection = True
+                border = state.intersection(other)
+                assert isinstance(border, (MultiLineString, Point)), \
+                    "border ({}, {}) is of type {}".format(n[0], o[0], type(border))
+            G.add_edge(n[0], o[0], border=border.length)
 
-  ax.set_xlim(min_x, max_x)
-  ax.set_ylim(min_y, max_y)
-  ax.set_aspect(1)
-  plt.show(fig)
+        if not has_connection:
+            # if this node is marooned, connect it to the closest object
+            dist = float('inf')
+            closest = None
+            
+            for node in G.nodes(data=True):
+                if node == n:
+                    continue
+                d = state.centroid.distance(node[1]['block'].centroid)
+                
+                if d < dist:
+                    closest = node
+                    dist = d
 
-# Converts a shapefile located at indir/infile.shp to a networkx graph.
-# If draw_graph is set to True, the graph is drawn using matplotlib.
+            G.add_edge(n[0], closest[0], border=0.0)
+
 def create_graph(indir, infile, draw_shapefile=False, draw_graph=False, pickle=False):
-  G = nx.Graph()
-  i = 1
-  ignore = set()
+    """Using a shapefile at {indir}/{infile}.shp, create a graph.
 
-  with cd(indir):
-    if os.path.isfile("block.txt"):
-      # ignore names in file
-      with open("block.txt", 'r') as block:
-        ignore = set([line.strip() for line in block])
+    Keyword arguments:
+    indir -- directory with shapefiles
+    infile -- file prefix (i.e., infile="foo" looks for a shapefile called "foo.shp")
+    draw_shapefile -- whether to draw the input shapefile (default False)
+    draw_graph -- whether to draw the resultant graph (default False)
+    pickle -- whether to pickle the resultant graph, stored at indir/infile.pickle (default False)
+    """
+    G = nx.Graph()
+    i = 1
+    ignore = set()
 
-    with fiona.open(infile + ".shp") as blocks:
-      for shp in blocks:
-        if 'NAME10' in shp['properties']:
-          name = shp['properties']['NAME10']
-        elif 'NAME' in shp['properties']:
-          name = shp['properties']['NAME']
-        else:
-          name = str(i)
+    with cd(indir):
+        if os.path.isfile("block.txt"):
+            # ignore names in file
+            with open("block.txt", 'r') as block:
+                ignore = set([line.strip() for line in block])
 
-        if name in ignore:
-          continue
+        with fiona.open(infile + ".shp") as blocks:
+            for shp in blocks:
+                if 'NAME10' in shp['properties']:
+                    name = shp['properties']['NAME10']
+                elif 'NAME' in shp['properties']:
+                    name = shp['properties']['NAME']
+                else:
+                    name = str(i)
 
-        block = shape(shp['geometry'])
+                if name in ignore:
+                    continue
 
-        if 'POP10' in shp['properties']:
-          pop = shp['properties']['POP10']
-        else:
-          pop = 0
+                block = shape(shp['geometry'])
 
-        G.add_node(name, block=block, pop=pop)
-        i += 1
+                if 'POP10' in shp['properties']:
+                    pop = shp['properties']['POP10']
+                else:
+                    pop = 0
 
-  if draw_shapefile:
-    plot_objects([n[1]['block'] for n in G.nodes(data=True)])
+                G.add_node(name, block=block, pop=pop)
+                i += 1
 
-  for n in G.nodes(data=True):
-    state = n[1]['block']
-    has_connection = False
-    for o in G.nodes(data=True):
-      other = o[1]['block']
-      if state is not other and state.touches(other):
-        has_connection = True
-        border = state.intersection(other)
-        assert isinstance(border, MultiLineString) or isinstance(border, Point), \
-          "border ({}, {}) is of type {}".format(n[0], o[0], type(border))
-        G.add_edge(n[0], o[0], border=border.length)
+    # draw the input shapefile
+    if draw_shapefile:
+        plot_shapes([n[1]['block'] for n in G.nodes(data=True)])
 
-    if not has_connection:
-      # connect it to the closest object
-      dist = float('inf')
-      closest = None
-      for node in G.nodes(data=True):
-        if node == n:
-          continue
-        d = state.centroid.distance(node[1]['block'].centroid)
-        if d < dist:
-          closest = node
-          dist = d
+    _connect_graph(G)
 
-      G.add_edge(n[0], closest[0], border=0.0)
+    if draw_graph:
+        pos = {n[0] : [n[1]['block'].centroid.x, n[1]['block'].centroid.y]
+               for n in G.nodes(data=True)}
+        nx.draw_networkx(G, pos=pos)
+        plt.show()
 
-  if draw_graph:
-    pos = { n[0] : [n[1]['block'].centroid.x, n[1]['block'].centroid.y] for n in G.nodes(data=True) }
-    nx.draw_networkx(G, pos=pos)
-    plt.show()
+    if pickle:
+        nx.write_gpickle(G, os.path.join(indir, infile + ".pickle"))
 
-  if pickle:
-    nx.write_gpickle(G, os.path.join(indir, infile + ".pickle"))
-
-  return G
+    return G

@@ -1,114 +1,107 @@
+"""Climbing utilities."""
+import time
+import logging
+import threading
+
 import partition
 import scorer
-from utils import random_subset
 
 import networkx as nx
 import matplotlib.pyplot as plt
-from tqdm import tqdm
+# from tqdm import tqdm
 
-from pathos.multiprocessing import ThreadingPool as TPool, ProcessingPool as PPool
-import time
+from pathos.multiprocessing import ThreadingPool as TPool
 
-import logging
-
-import threading
-
-"""
-Encapsulates a state, which consists of a partition and the set of hypothetical edges in that partition.
-"""
 class State():
-  def __init__(self, graph, hypotheticals, k, score=None):
-    self.G = graph
-    self.hypotheticals = hypotheticals
-    self.k = k
-    self.score = score if score is not None else scorer.score(self)
+    """Encapsulates a state, which consists of a partition and the set of hypothetical
+    edges in that partition."""
+    
+    def __init__(self, graph, hypotheticals, k, score=None):
+        self.G = graph
+        self.hypotheticals = hypotheticals
+        self.k = k
+        self.score = score if score is not None else scorer.score(self)
 
-  def evaluate_neighbor(self, args):
-    logging.info("evaluating edge", args)
-    u, v, data = args
-    v_neighbors = self.G.edges(v, data=True)
+    def evaluate_neighbor(self, args):
+        """Given a hypothetical edge (u,v,data), evaluate the effect of that edge."""
+        logging.info("evaluating edge " + args)
+        u, v, data = args
+        v_neighbors = self.G.edges(v, data=True)
 
-    self.G.remove_edges_from(v_neighbors)
-    self.G.add_edge(u, v, data)
+        self.G.remove_edges_from(v_neighbors)
+        self.G.add_edge(u, v, data)
 
-    if nx.number_connected_components(self.G) == self.k:
-      n_score = scorer.score(self)
-      n_gradient = differential(n_score, self.score)
+        if nx.number_connected_components(self.G) == self.k:
+            n_score = scorer.score(self)
+            n_gradient = differential(n_score, self.score)
 
-      self.G.remove_edge(u, v)
-      self.G.add_edges_from(v_neighbors)
+            self.G.remove_edge(u, v)
+            self.G.add_edges_from(v_neighbors)
 
-      return u, v, data, v_neighbors, n_score, n_gradient
-    else:
-      return u, v, data, v_neighbors, -1, -1
+            return u, v, data, v_neighbors, n_score, n_gradient
 
-  def best_neighbor(self):
-    best_score = None
-    best_cut = None
-    best_edge = None
-    best_gradient = 0
+        self.G.remove_edge(u, v)
+        self.G.add_edges_from(v_neighbors)
+        return u, v, data, v_neighbors, -1, -1
 
-    # pool = PPool()
-    grads = []
+    def _make_new_state(self, best_gradient):
+        """Helper function. Takes best gradient and makes that move."""
+        i, j, data, best_cut, best_score, grad = best_gradient
 
-    # for x in tqdm(pool.map(self.evaluate_neighbor, self.hypotheticals)):
-    #   grads.append(x)
+        if grad <= 0: # no valid (connected or better) neighbor
+            return None
 
-    # for x in tqdm(pool.map(self.evaluate_neighbor, [(j, i, d) for (i, j, d) in self.hypotheticals])):
-    #   grads.append(x)
+        Gp = self.G.copy()
+        Gp_hyps = self.hypotheticals.copy()
 
-    grads += map(self.evaluate_neighbor, self.hypotheticals)
-    grads += map(self.evaluate_neighbor, [(j, i, d) for (i, j, d) in self.hypotheticals])
+        # (i,j) is no longer hypothetical
+        Gp.add_edge(i, j, data)
 
-    best_grad = max(grads, key=lambda x: x[5])
+        try:
+            Gp_hyps.remove((i, j, data))
+        except ValueError:
+            Gp_hyps.remove((j, i, data))
 
-    i, j, data, best_cut, best_score, grad = best_grad
-    best_edge = (i, j, data)
+        # all removed edges from v to its old neighbors are now hypothetical
+        for v_edge in best_cut:
+            assert v_edge not in Gp_hyps
+            Gp_hyps.remove_edge(v_edge[0], v_edge[1])
+            Gp_hyps.append(v_edge)
 
-    if grad <= 0: # no valid (connected or better) neighbor
-      return None
+        # all edges from nodes in u's component to v are now realized
+        u_component = nx.node_connected_component(self.G, i)
+        for node in u_component:
+            for (x, y, data) in Gp_hyps:
+                if (x == node and y == j) or (x == j and y == node):
+                    Gp_hyps.remove((x, y, data))
+                    Gp.add_edge(x, y, data)
 
-    Gp = self.G.copy()
-    Gp_hyps = self.hypotheticals.copy()
+        return State(Gp, Gp_hyps, self.k, best_score)
 
-    # (i,j) is no longer hypothetical
-    Gp.add_edge(i, j, data)
+    def best_neighbor(self):
+        """Find this state's best neighbor state."""
+        # pool = PPool()
+        grads = []
 
-    try:
-      Gp_hyps.remove((i, j, data))
-    except ValueError:
-      Gp_hyps.remove((j, i, data))
+        grads += map(self.evaluate_neighbor, self.hypotheticals)
+        grads += map(self.evaluate_neighbor, [(j, i, d) for (i, j, d) in self.hypotheticals])
 
-    # all removed edges from v to its old neighbors are now hypothetical
-    for v_edge in best_cut:
-      assert v_edge not in Gp_hyps
-      Gp.remove_edge(v_edge[0], v_edge[1])
-      Gp_hyps.append(v_edge)
+        best_grad = max(grads, key=lambda x: x[5])
 
-    # all edges from nodes in u's component to v are now realized
-    u_component = nx.node_connected_component(self.G, i)
-    for node in u_component:
-      for (x, y, data) in Gp_hyps:
-        if (x == node and y == j) or (x == j and y == node):
-          Gp_hyps.remove((x, y, data))
-          Gp.add_edge(x, y, data)
-
-    return State(Gp, Gp_hyps, self.k, best_score)
+        return self._make_new_state(best_grad)        
 
 def differential(new_scores, cur_scores):
-  diffs = [scorer.WEIGHTS[i] * new_scores[i] - scorer.WEIGHTS[i] * cur_scores[i]
-              for i in range(len(cur_scores))]
-  total = 0
+    """Return the score diff between two states."""
+    diffs = [scorer.WEIGHTS[i] * new_scores[i] - scorer.WEIGHTS[i] * cur_scores[i]
+             for i in range(len(cur_scores))]
+    total = 0
 
-  for diff in diffs:
-    # if diff < 0:
-    #   return -1
-    total += diff
+    for diff in diffs:
+        # if diff < 0:
+        #   return -1
+        total += diff
 
-  return total
-
-  # return sum(diffs)
-
+    return total
 
 def draw_state(state, title=""):
   graph = state.G
