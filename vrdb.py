@@ -15,6 +15,7 @@ import os
 
 import requests
 from shapely.geometry import Point
+import networkx as nx
 
 def geocode(address_string):
     """Takes an address string and returns a Shapely Point object."""
@@ -27,7 +28,7 @@ def geocode(address_string):
     return Point(coords['lng'], coords['lat'])
 
 def find_block(graph, point):
-    """Takes a point and returns the vertex of the block that contains that point."""
+    """Takes a point and returns the vertex name of the block that contains that point."""
     # start at a random node (node = name of node, data = associated data)
     node, data = random.choice(graph.nodes(data=True))
     
@@ -39,11 +40,14 @@ def find_block(graph, point):
     return node
 
 #pylint: disable=R0914
-def build_block_map(graph, address_dir, address_file):
+def annotate_block_graph(graph, vr_config):
     """Build a map of records to blocks they're in (and vice-versa)."""
+    indir = vr_config.get("directory", "wa-vr-db")
+    infile = vr_config.get("filename", "201708_VRDB_Extract.txt")
+
     record_to_block = {}
     block_to_record = defaultdict(list)
-    with open(os.path.join(address_dir, address_file), 'r') as tsvin:
+    with open(os.path.join(indir, infile), 'r') as tsvin:
         tsvin = csv.reader(tsvin, delimiter='\t')
         next(tsvin, None) # skip header
 
@@ -67,11 +71,17 @@ def build_block_map(graph, address_dir, address_file):
             point = geocode(" ".join([street_num, street_pre_direction, street_frac, street_name,
                                       street_type, street_post_direction, unit_type, unit_num,
                                       city, state, zip_code]))
-            print(point)
+
             block = find_block(graph, point)
             record_to_block[state_voter_id] = block
             block_to_record[block].append(state_voter_id)
 
-    pickle.dump(record_to_block, open(os.path.join(address_dir, "record_to_block.pickle")))
-    pickle.dump(block_to_record, open(os.path.join(address_dir, "block_to_record.pickle")))
+    pickle.dump(record_to_block, open(os.path.join(indir, "record_to_block.pickle")))
+    pickle.dump(block_to_record, open(os.path.join(indir, "block_to_record.pickle")))
+
+    # annotate each vertex with the voters in that vertex's block
+    nx.set_node_attributes(graph, 'voters',
+                           {block: value for block, value in block_to_record.items()})
+
+
 

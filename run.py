@@ -1,46 +1,72 @@
 """Main runner."""
-import os
 import logging
 import argparse
+import json
+from datetime import datetime
 
 import shape
-import networkx as nx
-
-# import climber
 import vrdb
+from utils import cd
 
-def main(log_level=30, data_prefix='data', shape_name='state_shapes', force_reload_graph=False):
+def main(data_dir, county_config, block_config, vr_config):
     """Main function."""
-    logging.basicConfig(level=log_level, format=
-                        "[%(levelname)s %(asctime)s] %(filename)s@%(funcName)s [line %(lineno)d]: \
-                        %(message)s")
-    # filename="{}.log".format(datetime.now().isoformat()))
 
-    in_dir = os.path.join(data_prefix, shape_name)
+    with cd(data_dir):
+        county_graph = shape.create_county_graph(county_config)
+        block_graph = shape.create_block_graph(block_config, county_graph)
+        vrdb.annotate_block_graph(block_graph, vr_config)
 
-    if not force_reload_graph and os.path.exists(os.path.join(in_dir, shape_name + ".pickle")):
-        logging.info("Pickle found at %s", os.path.join(in_dir, shape_name + ".pickle"))
-        G = nx.read_gpickle(os.path.join(in_dir, shape_name + ".pickle"))
-        logging.info("Finished reading pickle")
-    else:
-        logging.info("No pickle found, reading from file")
-        G = shape.create_graph(in_dir, shape_name, pickle=True)
-
-    node = vrdb.build_block_map(G, address_dir="/var/local/rohan/wa-vr-db", address_file="vrdb_trunc.txt")
-    print(node)
-    # climber.find_frontier(G, 5, samples=samples)
-
+# pylint: disable=C0103
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate an optimal gerrymander.")
+    parser.add_argument('--config', dest='config_file', default='config.json',
+                        help="Load preferences from specified config file (default ./config.json). \
+                        If no configuration file is found, defaults to preferences set in \
+                        ./defaults.json.")
 
-    parser.add_argument('--log', help='Default logging level.',
-                        default='WARN', choices=['DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL'])
-    parser.add_argument('--reload', help='Overwrite pickle.', action="store_true")
+    parser.parse_args()
+    with open(parser.config_file) as config_file:
+        config = json.load(config_file)
 
-    parser.add_argument('--dir', help='Name of shapefiles.', default='state_shapes')
-    parser.add_argument('--data', help='Data directory.', default='data')
+    # for each config block, get if key exists, else return default
 
-    args = parser.parse_args()
+    log_config = config.get("logging", {"log_level": "WARN", "store_log_file": False})
+    log_level = getattr(logging, log_config.get("log_level", "WARN"), 30)
+    store_log_file = log_config.get("store_log_file", False)
 
-    main(log_level=getattr(logging, args.log.upper(), None), data_prefix=args.data,
-         shape_name=args.dir, force_reload_graph=args.reload)
+    if store_log_file:
+        logging.basicConfig(level=log_level, format=
+                            "[%(levelname)s %(asctime)s] %(filename)s@%(funcName)s (%(lineno)d): \
+                            %(message)s",
+                            filename="{}.log".format(datetime.now().isoformat()))
+    else:
+        logging.basicConfig(level=log_level, format=
+                            "[%(levelname)s %(asctime)s] %(filename)s@%(funcName)s (%(lineno)d): \
+                            %(message)s")
+
+    county_config = config.get("counties", {
+        "state_code": 53,
+        "directory": "wa-counties",
+        "filename": "wa-counties.shp",
+        "pickle_graph": True,
+        "draw_graph": False,
+        "draw_shapefile": False,
+        "reload_graph": False
+    })
+
+    block_config = config.get("blocks", {
+        "directory": "wa-blocks",
+        "filename": "wa-blocks.shp",
+        "pickle_graph": True,
+        "draw_graph": False,
+        "draw_shapefile": False,
+        "reload_graph": False
+    })
+
+    vr_config = config.get("voter_registration", {
+        "directory": "wa-vr-db",
+        "filename": "201708_VRDB_Extract.txt"
+    })
+
+    data_directory = config.get("data_directory", "/var/local/rohan")
+
