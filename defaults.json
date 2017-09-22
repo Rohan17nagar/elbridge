@@ -1,9 +1,8 @@
 {
 	"data_directory": "/var/local/rohan",
-	"counties": {
-		"state_code": 53,
-		"directory": "wa-counties",
-		"filename": "wa-counties.shp",
+	"block_groups": {
+		"directory": "wa-block-groups",
+		"filename": "block-groups.shp",
 		"pickle_graph": true,
 		"draw_graph": false,
 		"draw_shapefile": false,
@@ -11,7 +10,7 @@
 	},
 	"blocks": {
 		"directory": "wa-blocks",
-		"filename": "wa-blocks.shp",
+		"filename": "blocks.shp",
 		"pickle_graph": true,
 		"draw_graph": false,
 		"draw_shapefile": false,
@@ -19,7 +18,8 @@
 	},
 	"voter_registration": {
 		"directory": "wa-vr-db",
-		"filename": "201708_VRDB_Extract.txt"
+		"filename": "201708_VRDB_Extract.txt",
+		"authkey_file": "auth.key"
 	},
 	"logging": {
 		"log_level": "WARN",

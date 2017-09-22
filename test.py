@@ -1,67 +1,76 @@
-"""Testing."""
+"""Testing suite.
 
-import requests
-from shapely.geometry import shape, Point, MultiPolygon, Polygon
-from descartes import PolygonPatch
-import matplotlib.pyplot as plt
-from matplotlib.collections import PatchCollection
-import fiona
-from tqdm import tqdm
+Things that need to be tested --
+1. Shapefile --> graph (create_block_group_graph)
+2. Finer shapefile --> finer graph from coarse graph (create_block_graph)
 
-blocks = []
+For these two, generate a shapefile of 100000 2x2 boxes and 400000 1x1 boxes.
 
-def _load_blocks():
-    # point = Point(48.0817047, -123.1080016)
-    with fiona.open("/var/local/rohan/wa-blocks/blocks.shp") as blks:
-        for blk in tqdm(blks):
-            block = shape(blk['geometry'])
+"""
 
-            blocks.append(block)
+import unittest
+import os
 
+import shape
+from utils import cd
 
-def test():
-    """Testing code."""
-    test_string = "308 SPRUCE ST W SEQUIM WA 98382"
+import networkx as nx
 
-    r = requests.get("https://maps.googleapis.com/maps/api/geocode/json",
-                     params={"address": test_string,
-                             "key": "AIzaSyDV3WKAIL3ywBs7yMafnZiDi4qV3nAS4tI"})
-    output = r.json()['results']
+class TestShapefileToGraph(unittest.TestCase):
+    """Given a coarse and fine shapefile, generate graphs."""
+    # @unittest.skipUnless(os.path.exists('block-groups/block-groups.shp'),
+    #                      "No block group shapefile found")
+    def test_block_group_graph(self):
+        """Test that block group graph generates correctly."""
+        block_group_config = {
+            "directory": "block-groups",
+            "filename": "block-groups.shp",
+            "pickle_graph": False,
+            "draw_graph": False,
+            "draw_shapefile": False,
+            "reload_graph": False
+        }
 
-    coords = output[0]['geometry']['location']
-    point = Point(coords['lng'], coords['lat'])
+        G = shape.create_block_group_graph(block_group_config)
 
-    print(point)
+        self.assertEqual(len(G), 256)
+        print(G.edges("000000000000", data=True))
+        self.assertTrue(nx.is_isomorphic(G, nx.grid_graph([16, 16])))
 
-    for block in tqdm(blocks):
-        if block.intersects(point):
-            block.color = "#0000FF"
-            print("FOUND!")
-        else:
-            block.color = "#FF0000"
+        expected_nodes = ["{:012d}".format(i) for i in range(256)]
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
+        self.assertEqual(set(expected_nodes), set(G.nodes()))
 
-    mp = MultiPolygon(blocks)
-    minx, miny, maxx, maxy = mp.bounds
-    w, h = maxx - minx, maxy - miny
+        self.assertFalse(os.path.exists("block-groups/block-groups.graph.pickle"))
 
-    ax.set_xlim(minx - 0.2 * w, maxx + 0.2 * w)
-    ax.set_ylim(miny - 0.2 * h, maxy + 0.2 * h)
-    ax.set_aspect(1)
+    # @unittest.skip("No block shapefile yet")
+    def test_block_graph(self):
+        """Test that block graph generates correctly."""
+        block_group_config = {
+            "directory": "block-groups",
+            "filename": "block-groups.shp",
+            "pickle_graph": False,
+            "draw_graph": False,
+            "draw_shapefile": False,
+            "reload_graph": False
+        }
 
-    patches = []
-    for idx, p in enumerate(blocks):
-        patches.append(PolygonPatch(p, fc=p.color, ec='#555555', alpha=1.))
-    ax.add_collection(PatchCollection(patches, match_original=True))
+        G = shape.create_block_group_graph(block_group_config)
 
-    ax.add_patch(PolygonPatch(point.buffer(0.001)))
-    
-    ax.set_aspect(1)
-    plt.show(fig)
+        block_config = {
+            "directory": "blocks",
+            "filename": "blocks.shp",
+            "pickle_graph": False,
+            "draw_graph": False,
+            "draw_shapefile": False,
+            "reload_graph": False
+        }
 
+        G2 = shape.create_block_graph(block_config, G)
+
+        self.assertEqual(len(G2), 96**2)
+        self.assertTrue(nx.is_isomorphic(G2, nx.grid_graph([96, 96])))
 
 if __name__ == "__main__":
-    _load_blocks()
-    test()
+    with cd('/var/local/rohan/test_data/'):
+        unittest.main()

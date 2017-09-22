@@ -8,13 +8,13 @@ import shape
 import vrdb
 from utils import cd
 
-def main(data_dir, county_config, block_config, vr_config):
+def main(data_dir, block_group_config, block_config, vr_config):
     """Main function."""
 
     with cd(data_dir):
-        county_graph = shape.create_county_graph(county_config)
-        block_graph = shape.create_block_graph(block_config, county_graph)
-        vrdb.annotate_block_graph(block_graph, vr_config)
+        block_group_graph = shape.create_block_group_graph(block_group_config)
+        block_graph = shape.create_block_graph(block_config, block_group_graph)
+        # vrdb.annotate_block_graph(block_graph, vr_config)
 
 # pylint: disable=C0103
 if __name__ == "__main__":
@@ -24,8 +24,8 @@ if __name__ == "__main__":
                         If no configuration file is found, defaults to preferences set in \
                         ./defaults.json.")
 
-    parser.parse_args()
-    with open(parser.config_file) as config_file:
+    args = parser.parse_args()
+    with open(args.config_file) as config_file:
         config = json.load(config_file)
 
     # for each config block, get if key exists, else return default
@@ -44,29 +44,29 @@ if __name__ == "__main__":
                             "[%(levelname)s %(asctime)s] %(filename)s@%(funcName)s (%(lineno)d): \
                             %(message)s")
 
-    county_config = config.get("counties", {
-        "state_code": 53,
-        "directory": "wa-counties",
-        "filename": "wa-counties.shp",
+    block_group_configuration = config.get("block_groups", {
+        "directory": "wa-block-groups",
+        "filename": "block-groups.shp",
         "pickle_graph": True,
         "draw_graph": False,
         "draw_shapefile": False,
         "reload_graph": False
     })
 
-    block_config = config.get("blocks", {
+    block_configuration = config.get("blocks", {
         "directory": "wa-blocks",
-        "filename": "wa-blocks.shp",
+        "filename": "blocks.shp",
         "pickle_graph": True,
         "draw_graph": False,
         "draw_shapefile": False,
         "reload_graph": False
     })
 
-    vr_config = config.get("voter_registration", {
+    vr_configuration = config.get("voter_registration", {
         "directory": "wa-vr-db",
-        "filename": "201708_VRDB_Extract.txt"
+        "filename": "201708_VRDB_Extract.txt",
+        "authkey_file": "auth.key"
     })
 
     data_directory = config.get("data_directory", "/var/local/rohan")
-
+    main(data_directory, block_group_configuration, block_configuration, vr_configuration)

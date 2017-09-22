@@ -7,13 +7,14 @@ import random
 from collections import defaultdict
 
 # imports for shapefiles
-from shapely.geometry import shape, Point, MultiLineString
+from shapely.geometry import shape, LineString, MultiLineString
 import fiona
 import descartes
 
 # imports for graphs
 import networkx as nx
 from matplotlib import pyplot as plt
+from tqdm import tqdm
 
 # utilities
 from utils import cd
@@ -65,66 +66,66 @@ def plot_shapes(objects, random_color=False, show_centroids=False):
     ax.set_aspect(1)
     plt.show(fig)
 
-def _connect_subgraph(G, a_nodes, b_nodes):
+def _connect_subgraph(G, a_nodes, b_nodes, same=False):
     """Helper function. Connects graph."""
-    i = 0
 
     # G must contain all nodes in a_nodes and b_nodes
-    assert all([G.has_node(node) for node, _ in a_nodes + b_nodes])
+    assert all([G.has_node(node) for node in a_nodes + b_nodes])
 
-    same = False
-    if a_nodes == b_nodes:
-        same = True
-
-    while i < len(a_nodes):
-        n, n_data = a_nodes[i]
+    for idx in tqdm(range(len(a_nodes)), "Discovering edges"):
+    # for i in tqdm(range(len(a_nodes))):
+        n_name = a_nodes[idx]
+        n_data = G.node[n_name]
         this = n_data['shape']
         has_connection = False
-        
+
         # if a_nodes == b_nodes, don't need to compare anything in b_nodes[:i] to a_nodes[i]
-        for o, o_data in b_nodes[i:] if same else b_nodes:
+        for o_name in b_nodes[idx:] if same else b_nodes:
+            o_data = G.node[o_name]
             other = o_data['shape']
             if this is not other and this.touches(other):
                 has_connection = True
                 border = this.intersection(other)
-                assert isinstance(border, (MultiLineString, Point)), \
-                    "border ({}, {}) is of type {}".format(n, o, type(border))
-            G.add_edge(n, o, border=border.length)
+                if border.length == 0.0:
+                    continue
 
-        if not has_connection:
+                # assert isinstance(border, (LineString, MultiLineString)), \
+                #     "border ({}, {}) is of type {}: {}".format(n_name, o_name, type(border), border.wkt)
+                G.add_edge(n_name, o_name, border=border.length)
+
+        if same and not has_connection:
             # if this node is marooned, connect it to the closest object
             dist = float('inf')
             closest = None
             
-            for node, data in G.nodes(data=True):
-                if node == n:
+            for o_name in a_nodes:
+                o_data = G.node[o_name]
+                if o_name == n_name:
                     continue
-                d = this.centroid.distance(data['shape'].centroid)
+                d = this.centroid.distance(o_data['shape'].centroid)
                 
                 if d < dist:
-                    closest = node
+                    closest = o_name
                     dist = d
 
-            G.add_edge(n, closest, border=0.0)
+            G.add_edge(n_name, closest, border=0.0)
+
 
 def _connect_graph(G):
-    _connect_subgraph(G, G.nodes(data=True), G.nodes(data=True))
+    _connect_subgraph(G, G.nodes(), G.nodes(), same=True)
 
-
-def create_county_graph(county_config):
+def create_block_group_graph(block_group_config):
     """Build a county graph."""
-
-    state_code = county_config.get("state_code", 53)
+ 
+    indir = block_group_config.get("directory", "wa-block-groups")
+    infile = block_group_config.get("filename", "block-groups.shp")
     
-    indir = county_config.get("directory", "wa-counties")
-    infile = county_config.get("filename", "wa-counties.shp")
-    
-    draw_shapefile = county_config.get("draw_shapefile", False)
-    draw_graph = county_config.get("draw_graph", False)
+    draw_shapefile = block_group_config.get("draw_shapefile", False)
+    draw_graph = block_group_config.get("draw_graph", False)
 
-    pickle = county_config.get("pickle_graph", True)
+    pickle = block_group_config.get("pickle_graph", True)
 
-    reload_graph = county_config.get("reload_graph", False)
+    reload_graph = block_group_config.get("reload_graph", False)
 
     if not reload_graph and os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
         return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
@@ -132,16 +133,11 @@ def create_county_graph(county_config):
     G = nx.Graph()
 
     with cd(indir):
-        with fiona.open(infile) as counties:
-            for idx, shp in enumerate(counties):
-                if "STATEFP" not in shp['properties'] \
-                    or shp['properties']["STATEFP"] is not str(state_code):
-                    # ignore counties not in the desired state
-                    continue
-
+        with fiona.open(infile) as block_groups:
+            for shp in tqdm(block_groups, "Reading block groups from shapefile"):
                 shape_obj = shape(shp['geometry'])
 
-                vertex_name = shp['properties'].get("COUNTYFP", idx)
+                vertex_name = shp['properties'].get("GEOID")
 
                 G.add_node(vertex_name, shape=shape_obj)
 
@@ -163,11 +159,11 @@ def create_county_graph(county_config):
     return G
 
 # pylint: disable=R0914
-def create_block_graph(block_config, counties):
-    """Using a county graph as a base, build a block graph."""
+def create_block_graph(block_config, block_groups):
+    """Using a block group graph as a base, build a block graph."""
 
     indir = block_config.get("directory", "wa-blocks")
-    infile = block_config.get("filename", "wa-blocks.shp")
+    infile = block_config.get("filename", "blocks.shp")
     
     draw_shapefile = block_config.get("draw_shapefile", False)
     draw_graph = block_config.get("draw_graph", False)
@@ -179,30 +175,30 @@ def create_block_graph(block_config, counties):
     if not reload_graph and os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
         return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
 
-    # county --> graph of vertices in that county
-    county_graphs = defaultdict(nx.Graph)
+    G = nx.Graph()
+    # block group --> list of vertices in that block group
+    blocks_per_block_group = defaultdict(list)
 
     with cd(indir):
-        with fiona.open(infile + ".shp") as blocks:
-            for idx, shp in enumerate(blocks):
-                county_code = shp['properties'].get('COUNTYFP10', -1)
-                name = shp['properties'].get('NAME10', "Block " + idx)
-                block = shape(shp['geometry'])
-                county_graphs[county_code].add_node(name, shape=block)
+        with fiona.open(infile) as blocks:
+            for shp in tqdm(blocks, "Reading blocks from shapefile"):
+                geo_id = shp['properties'].get('GEOID10')
+                # name = shp['properties'].get('NAME10', "Block " + str(idx))
+                block_obj = shape(shp['geometry'])
+                G.add_node(geo_id, shape=block_obj)
 
-    G = nx.Graph()
-
-    for graph in county_graphs.values():
-        G = nx.compose(G, graph)
+                # GEOID of block == GEOID of block group + block ID
+                block_group = geo_id[:-3]
+                blocks_per_block_group[block_group].append(geo_id)
 
     if draw_shapefile:
         plot_shapes([n[1]['shape'] for n in G.nodes(data=True)])
 
-    for i in counties.nodes():
-        _connect_subgraph(G, county_graphs[i].nodes(data=True), county_graphs[i].nodes(data=True))
+    for i in tqdm(block_groups.nodes(), "Building block group subgraphs"):
+        _connect_subgraph(G, blocks_per_block_group[i], blocks_per_block_group[i], same=True)
 
-    for i, j in counties.edges():
-        _connect_subgraph(G, county_graphs[i].nodes(data=True), county_graphs[j].nodes(data=True))
+    for i, j in tqdm(block_groups.edges(), "Building cross-block group subgraphs"):
+        _connect_subgraph(G, blocks_per_block_group[i], blocks_per_block_group[j])
 
     if draw_graph:
         pos = {n[0] : [n[1]['shape'].centroid.x, n[1]['shape'].centroid.y]
@@ -214,4 +210,3 @@ def create_block_graph(block_config, counties):
         nx.write_gpickle(G, os.path.join(indir, infile + ".graph.pickle"))
 
     return G
-

@@ -17,11 +17,18 @@ import requests
 from shapely.geometry import Point
 import networkx as nx
 
-def geocode(address_string):
+def get_auth_key(authfile):
+    """Get Google Maps API key from file."""
+    with open(authfile) as f:
+        key = f.read()
+
+    return key
+
+def geocode(address_string, authkey):
     """Takes an address string and returns a Shapely Point object."""
     r = requests.get("https://maps.googleapis.com/maps/api/geocode/json",
                      params={"address": address_string,
-                             "key": "AIzaSyDV3WKAIL3ywBs7yMafnZiDi4qV3nAS4tI"})
+                             "key": authkey})
     output = r.json()['results']
 
     coords = output[0]['geometry']['location']
@@ -44,6 +51,9 @@ def annotate_block_graph(graph, vr_config):
     """Build a map of records to blocks they're in (and vice-versa)."""
     indir = vr_config.get("directory", "wa-vr-db")
     infile = vr_config.get("filename", "201708_VRDB_Extract.txt")
+    authkey_file = vr_config.get("authkey_file", "auth.key")
+
+    authkey = get_auth_key(authkey_file)
 
     record_to_block = {}
     block_to_record = defaultdict(list)
@@ -70,7 +80,7 @@ def annotate_block_graph(graph, vr_config):
                 continue
             point = geocode(" ".join([street_num, street_pre_direction, street_frac, street_name,
                                       street_type, street_post_direction, unit_type, unit_num,
-                                      city, state, zip_code]))
+                                      city, state, zip_code]), authkey)
 
             block = find_block(graph, point)
             record_to_block[state_voter_id] = block
