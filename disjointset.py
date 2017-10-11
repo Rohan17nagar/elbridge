@@ -1,7 +1,5 @@
 # pylint: disable=C0103
 """Disjoint-set operator."""
-import networkx as nx
-
 class DisjointSet():
     """Disjoint-set data structure."""
 

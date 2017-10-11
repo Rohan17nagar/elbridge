@@ -1,23 +1,17 @@
 # Gerrymandering
 
-### How to run this
+## Files
 
-1. Pull this repo:
+* `shape.py` contains methods that read block group and block shapefiles and convert them to 
+graphs.
+* `annotater.py` contains methods that annotate block graphs with data, including precinct-level vote breakdowns and block-level demographic data.
+* `genetics.py` contains an implementation of NSGA-II, a popular genetic algorithm for multi-objective optimization.
+* `objectives.py` contains several objective functions on graphs, used in NSGA-II.
+* `disjointset.py` contains a basic implementation of the disjoint-set data structure, used for tracking graph connectivity (the number of connected components in a graph) during graph reconstruction (the process by which a chromosome is converted back into a graph).
+* `utils.py` contains several helper functions.
+* `test.py` contains several tests of basic functionality.
+* `run.py` contains the main runner and configuration file parser.
 
-```
-git clone git@github.com:rohan/gerrymander.git
-cd gerrymander/
-```
+## How to run this
 
-2. Next, create a data directory (you'll need a lot of room).
-
-3. Using the [Census TIGER database](https://census.gov/geo/maps-data/data/tiger-line.html), download the following files:
-- [2016 Washington county map](ftp://ftp2.census.gov/geo/tiger/TIGER2016/COUNTY/tl_2016_us_county.zip)
-- [2016 Washington block map](ftp://ftp2.census.gov/geo/tiger/TIGER2016/TABBLOCK/tl_2016_53_tabblock10.zip)
-- The most recent voter registration database for Washington. You'll need to request permission on the [Washington Secretary of State website](https://www.sos.wa.gov/elections/vrdb/extract-requests.aspx).
-
-4. Create folders in your data directory for each file, e.g., `your_data_directory/wa-counties`.
-
-5. Unzip each file into your data directory, as follows: `unzip filename.zip -d your_data_directory/folder_for_file`.
-
-6. Create a config file by copying the existing file: ~
+Run `python run.py --config=defaults.json`. You'll need to download the appropriate datasets (see `data.md` for more information).
