@@ -15,7 +15,10 @@ import os
 
 import requests
 from shapely.geometry import Point
+from shapely.wkt import loads
+import geocoder
 import networkx as nx
+from tqdm import tqdm
 
 def get_auth_key(authfile):
     """Get Google Maps API key from file."""
@@ -24,26 +27,34 @@ def get_auth_key(authfile):
 
     return key
 
-def geocode(address_string, authkey):
-    """Takes an address string and returns a Shapely Point object."""
-    r = requests.get("https://maps.googleapis.com/maps/api/geocode/json",
-                     params={"address": address_string,
-                             "key": authkey})
-    output = r.json()['results']
+# def geocode(address_string, authkey):
+#     """Takes an address string and returns a Shapely Point object."""
+#     r = requests.get("https://maps.googleapis.com/maps/api/geocode/json",
+#                      params={"address": address_string,
+#                              "key": authkey})
+#     output = r.json()['results']
+# 
+#     coords = output[0]['geometry']['location']
+#     return Point(coords['lng'], coords['lat'])
 
-    coords = output[0]['geometry']['location']
-    return Point(coords['lng'], coords['lat'])
+def geocode(address_string):
+    """Use Census database for geocoding (experimental)."""
+    g = geocoder.uscensus(address_string)
+    if g.ok:
+        return loads(g.wkt)
+    else:
+        return None
 
 def find_block(graph, point):
     """Takes a point and returns the vertex name of the block that contains that point."""
     # start at a random node (node = name of node, data = associated data)
     node, data = random.choice(graph.nodes(data=True))
-    
-    while not data['block'].contains(point):
-        # among all of the neighbors of node, find the one whose distance is minimal
-        node = min(graph.neighbors(node), key=lambda n: graph.node[n]['block'].distance(point))
-        data = graph.node[node]
 
+    while not data['shape'].contains(point):
+        # among all of the neighbors of node, find the one whose distance is minimal
+        node = min(graph.neighbors(node), key=lambda n: graph.node[n]['shape'].distance(point))
+        data = graph.node[node]
+    print(node)
     return node
 
 #pylint: disable=R0914
@@ -51,9 +62,6 @@ def annotate_block_graph(graph, vr_config):
     """Build a map of records to blocks they're in (and vice-versa)."""
     indir = vr_config.get("directory", "wa-vr-db")
     infile = vr_config.get("filename", "201708_VRDB_Extract.txt")
-    authkey_file = vr_config.get("authkey_file", "auth.key")
-
-    authkey = get_auth_key(authkey_file)
 
     record_to_block = {}
     block_to_record = defaultdict(list)
@@ -61,8 +69,8 @@ def annotate_block_graph(graph, vr_config):
         tsvin = csv.reader(tsvin, delimiter='\t')
         next(tsvin, None) # skip header
 
-        for record in tsvin:
-            if len(record) is 0:
+        for record in tqdm(tsvin, desc="Reading voter registration DB"):
+            if len(record) is 0: # every other line is empty, for some reason
                 continue
 
             [state_voter_id, _, _, _, _, _, _, _, _, street_num, street_frac, street_name,
@@ -80,7 +88,7 @@ def annotate_block_graph(graph, vr_config):
                 continue
             point = geocode(" ".join([street_num, street_pre_direction, street_frac, street_name,
                                       street_type, street_post_direction, unit_type, unit_num,
-                                      city, state, zip_code]), authkey)
+                                      city, state, zip_code]))
 
             block = find_block(graph, point)
             record_to_block[state_voter_id] = block

@@ -1,4 +1,4 @@
-# pylint: disable=C0103
+# pylint: disable=C0103,R0914
 """
 Tools for reading in shapefiles and creating networkx graphs.
 """
@@ -7,7 +7,7 @@ import random
 from collections import defaultdict
 
 # imports for shapefiles
-from shapely.geometry import shape, LineString, MultiLineString
+from shapely.geometry import shape
 import fiona
 import descartes
 
@@ -41,11 +41,17 @@ def plot_shapes(objects, random_color=False, show_centroids=False):
     #         y += obj.centroid.y * (float(obj.area) / total_area)
 
     for obj in objects:
-        if random_color:
+        color = None
+        if isinstance(obj, tuple):
+            obj, color = obj
+
+        if not color and random_color:
             color = (random.random(), random.random(), random.random())
-            patch = descartes.PolygonPatch(obj, color=color)
+            patch = descartes.PolygonPatch(obj, color=color, ec=(0, 0, 0))
+        elif color:
+            patch = descartes.PolygonPatch(obj, color=color, ec=(0, 0, 0))
         else:
-            patch = descartes.PolygonPatch(obj)
+            patch = descartes.PolygonPatch(obj, ec=(0, 0, 0))
 
         ax.add_patch(patch)
 
@@ -60,8 +66,8 @@ def plot_shapes(objects, random_color=False, show_centroids=False):
     # if show_centroids:
     #     ax.add_patch(descartes.PolygonPatch(Point(x, y).buffer(1.0)))
 
-    ax.set_xlim(min_x, max_x)
-    ax.set_ylim(min_y, max_y)
+    ax.set_xlim(min_x - (max_x - min_x) * 0.1, max_x + (max_x - min_x) * 0.1)
+    ax.set_ylim(min_y - (max_y - min_y) * 0.1, max_y + (max_y - min_y) * 0.1)
 
     ax.set_aspect(1)
     plt.show(fig)
@@ -89,33 +95,41 @@ def _connect_subgraph(G, a_nodes, b_nodes, same=False):
                 if border.length == 0.0:
                     continue
 
-                # assert isinstance(border, (LineString, MultiLineString)), \
-                #     "border ({}, {}) is of type {}: {}".format(n_name, o_name, type(border), border.wkt)
                 G.add_edge(n_name, o_name, border=border.length)
 
         if same and not has_connection:
             # if this node is marooned, connect it to the closest object
-            dist = float('inf')
-            closest = None
+            closest = min([node for node in a_nodes if node != n_name],
+                          key=lambda o_name, t=this:
+                          t.centroid.distance(G.node[o_name]['shape'].centroid))
             
-            for o_name in a_nodes:
-                o_data = G.node[o_name]
-                if o_name == n_name:
-                    continue
-                d = this.centroid.distance(o_data['shape'].centroid)
-                
-                if d < dist:
-                    closest = o_name
-                    dist = d
-
             G.add_edge(n_name, closest, border=0.0)
 
 
 def _connect_graph(G):
     _connect_subgraph(G, G.nodes(), G.nodes(), same=True)
 
+def get_precinct_shapes(precinct_config):
+    """Get precincts from file."""
+    indir = precinct_config.get("directory", "wa-precincts")
+    infile = precinct_config.get("filename", "precincts.shp")
+
+    precinct_shapes = {}
+
+    with cd(indir):
+        with fiona.open(infile) as precincts:
+            for shp in tqdm(precincts, "Reading precincts from shapefile"):
+                st_code = shp['properties'].get('ST_CODE')
+
+                precinct_obj = shape(shp['geometry'])
+
+                assert st_code not in precinct_shapes
+                precinct_shapes[st_code] = precinct_obj
+
+    return precinct_shapes
+
 def create_block_group_graph(block_group_config):
-    """Build a county graph."""
+    """Build a block group graph."""
  
     indir = block_group_config.get("directory", "wa-block-groups")
     infile = block_group_config.get("filename", "block-groups.shp")
@@ -127,8 +141,12 @@ def create_block_group_graph(block_group_config):
 
     reload_graph = block_group_config.get("reload_graph", False)
 
-    if not reload_graph and os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
-        return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
+    if not reload_graph:
+        if os.path.exists(os.path.join(indir, infile + ".annotated_graph.pickle")):
+            return nx.read_gpickle(os.path.join(indir, infile + ".annotated_graph.pickle"))
+        elif os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
+            return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
+        
 
     G = nx.Graph()
 
@@ -158,7 +176,6 @@ def create_block_group_graph(block_group_config):
 
     return G
 
-# pylint: disable=R0914
 def create_block_graph(block_config, block_groups):
     """Using a block group graph as a base, build a block graph."""
 
@@ -172,8 +189,11 @@ def create_block_graph(block_config, block_groups):
 
     reload_graph = block_config.get("reload_graph", False)
 
-    if not reload_graph and os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
-        return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
+    if not reload_graph:
+        if os.path.exists(os.path.join(indir, infile + ".annotated_graph.pickle")):
+            return nx.read_gpickle(os.path.join(indir, infile + ".annotated_graph.pickle"))
+        elif os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
+            return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
 
     G = nx.Graph()
     # block group --> list of vertices in that block group
@@ -210,3 +230,4 @@ def create_block_graph(block_config, block_groups):
         nx.write_gpickle(G, os.path.join(indir, infile + ".graph.pickle"))
 
     return G
+

@@ -1,0 +1,9 @@
+read block groups from file: 00:03 (1414.33 it/s)
+build block group graph: 03:53 (5.05 it/s)
+annotate block group graph: 02:20 (51.18 it/s)
+build block group subgraphs: 06:29 (12.29 it/s)
+build cross-block group subgraphs: 04:38 (47.84 it/s)
+annotate block graph: 04:18 (756.12 it/s)
+
+1510 blocks without precincts, or 0.7%
+28 records with not found precincts --> 4 precincts with no blocks, or 0.1%

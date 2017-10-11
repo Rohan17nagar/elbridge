@@ -21,6 +21,11 @@
 		"filename": "201708_VRDB_Extract.txt",
 		"authkey_file": "auth.key"
 	},
+	"precincts": {
+		"directory": "wa-precincts",
+		"filename": "precincts.shp",
+		"pickle_graph": true
+	},
 	"logging": {
 		"log_level": "WARN",
 		"store_log_file": false

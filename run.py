@@ -5,16 +5,32 @@ import json
 from datetime import datetime
 
 import shape
-import vrdb
+import annotater
 from utils import cd
 
-def main(data_dir, block_group_config, block_config, vr_config):
+def main(data_dir, block_group_config, block_config, election_config, precinct_config):
     """Main function."""
 
     with cd(data_dir):
+        logging.debug("Creating block group graph...")
         block_group_graph = shape.create_block_group_graph(block_group_config)
+        logging.debug("Block group graph created.")
+
+        logging.debug("Annotating block group graph with precincts...")
+        annotater.add_precincts_bg(block_group_config, precinct_config, block_group_graph)
+        logging.debug("Block group graph annotated.")
+
+        logging.debug("Creating block graph...")
         block_graph = shape.create_block_graph(block_config, block_group_graph)
-        # vrdb.annotate_block_graph(block_graph, vr_config)
+        logging.debug("Block group created.")
+
+        logging.debug("Annotating block graph with precincts...")
+        annotater.add_precincts_block(block_config, precinct_config, block_graph, block_group_graph)
+        logging.debug("Block group annotated.")
+
+        logging.debug("Adding voting data...")
+        annotater.add_election_data(election_config, precinct_config, block_graph)
+
 
 # pylint: disable=C0103
 if __name__ == "__main__":
@@ -62,11 +78,24 @@ if __name__ == "__main__":
         "reload_graph": False
     })
 
-    vr_configuration = config.get("voter_registration", {
-        "directory": "wa-vr-db",
-        "filename": "201708_VRDB_Extract.txt",
-        "authkey_file": "auth.key"
+    # vr_configuration = config.get("voter_registration", {
+    #     "directory": "wa-vr-db",
+    #     "filename": "201708_VRDB_Extract.txt",
+    #     "authkey_file": "auth.key"
+    # })
+
+    precinct_configuration = config.get("precincts", {
+        "directory": "wa-precincts",
+        "filename": "precincts.shp",
+        "pickle_graph": True,
+        "draw_shapefile": False,
+    })
+
+    election_configuration = config.get("elections", {
+        "directory": "wa-election-data",
+        "filename": "election-data.csv"
     })
 
     data_directory = config.get("data_directory", "/var/local/rohan")
-    main(data_directory, block_group_configuration, block_configuration, vr_configuration)
+    main(data_directory, block_group_configuration, block_configuration,
+         election_configuration, precinct_configuration)

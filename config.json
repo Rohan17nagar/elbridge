@@ -1,5 +1,6 @@
 {
 	"data_directory": "/var/local/rohan",
+	"pickle_directory": "pickles",
 	"block_groups": {
 		"directory": "wa-block-groups",
 		"filename": "block-groups.shp",
@@ -20,6 +21,15 @@
 		"directory": "wa-vr-db",
 		"filename": "201708_VRDB_Extract.txt",
 		"authkey_file": "auth.key"
+	},
+	"precincts": {
+		"directory": "wa-precincts",
+		"filename": "precincts.shp",
+		"pickle_graph": true
+	},
+	"elections": {
+		"directory": "wa-election-data",
+		"filename": "election-data.csv"
 	},
 	"logging": {
 		"log_level": "WARN",
