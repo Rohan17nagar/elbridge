@@ -7,29 +7,36 @@ from datetime import datetime
 import shape
 import annotater
 from utils import cd
+import genetics
 
-def main(data_dir, block_group_config, block_config, election_config, precinct_config):
+def main(data_dir, block_group_config, block_config, county_config, election_config, precinct_config):
     """Main function."""
 
     with cd(data_dir):
-        logging.debug("Creating block group graph...")
-        block_group_graph = shape.create_block_group_graph(block_group_config)
-        logging.debug("Block group graph created.")
+        # logging.debug("Creating block group graph...")
+        # block_group_graph = shape.create_block_group_graph(block_group_config)
+        # logging.debug("Block group graph created.")
 
-        logging.debug("Annotating block group graph with precincts...")
-        annotater.add_precincts_bg(block_group_config, precinct_config, block_group_graph)
-        logging.debug("Block group graph annotated.")
+        # logging.debug("Annotating block group graph with precincts...")
+        # annotater.add_precincts_bg(block_group_config, precinct_config, block_group_graph)
+        # logging.debug("Block group graph annotated.")
 
-        logging.debug("Creating block graph...")
-        block_graph = shape.create_block_graph(block_config, block_group_graph)
-        logging.debug("Block group created.")
+        # logging.debug("Creating block graph...")
+        # block_graph = shape.create_block_graph(block_config, block_group_graph)
+        # logging.debug("Block group created.")
 
-        logging.debug("Annotating block graph with precincts...")
-        annotater.add_precincts_block(block_config, precinct_config, block_graph, block_group_graph)
-        logging.debug("Block group annotated.")
+        # logging.debug("Annotating block graph with precincts...")
+        # annotater.add_precincts_block(block_config, precinct_config,
+        #                               block_graph, block_group_graph)
+        # logging.debug("Block group annotated.")
 
-        logging.debug("Adding voting data...")
-        annotater.add_election_data(election_config, precinct_config, block_graph)
+        county_graph = shape.create_county_graph(county_config)
+        annotater.add_census_data(county_config, county_graph)
+
+        print("Finished reading in all graphs.")
+
+        genetics.run(county_graph)
+        
 
 
 # pylint: disable=C0103
@@ -78,11 +85,19 @@ if __name__ == "__main__":
         "reload_graph": False
     })
 
-    # vr_configuration = config.get("voter_registration", {
-    #     "directory": "wa-vr-db",
-    #     "filename": "201708_VRDB_Extract.txt",
-    #     "authkey_file": "auth.key"
-    # })
+    county_configuration = config.get("counties", {
+        "directory": "wa-counties",
+        "filename": "counties.shp",
+        "pickle_graph": True,
+        "draw_graph": False,
+        "draw_shapefile": True,
+        "reload_graph": False,
+        "state_code": "53",
+        "data": {
+            "directory": "data",
+            "filename": "counties.csv"
+        }
+    })
 
     precinct_configuration = config.get("precincts", {
         "directory": "wa-precincts",
@@ -98,4 +113,4 @@ if __name__ == "__main__":
 
     data_directory = config.get("data_directory", "/var/local/rohan")
     main(data_directory, block_group_configuration, block_configuration,
-         election_configuration, precinct_configuration)
+         county_configuration, election_configuration, precinct_configuration)

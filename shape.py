@@ -19,7 +19,7 @@ from tqdm import tqdm
 # utilities
 from utils import cd
 
-def plot_shapes(objects, random_color=False, show_centroids=False):
+def plot_shapes(objects, random_color=False, show_centroids=False, title=""):
     """Plots shapely shapes."""
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -68,6 +68,8 @@ def plot_shapes(objects, random_color=False, show_centroids=False):
 
     ax.set_xlim(min_x - (max_x - min_x) * 0.1, max_x + (max_x - min_x) * 0.1)
     ax.set_ylim(min_y - (max_y - min_y) * 0.1, max_y + (max_y - min_y) * 0.1)
+
+    plt.title(title)
 
     ax.set_aspect(1)
     plt.show(fig)
@@ -128,6 +130,57 @@ def get_precinct_shapes(precinct_config):
 
     return precinct_shapes
 
+def create_county_graph(county_config):
+    """Build a county graph."""
+ 
+    indir = county_config.get("directory", "wa-counties")
+    infile = county_config.get("filename", "counties.shp")
+    
+    draw_shapefile = county_config.get("draw_shapefile", False)
+    draw_graph = county_config.get("draw_graph", False)
+
+    pickle = county_config.get("pickle_graph", True)
+
+    reload_graph = county_config.get("reload_graph", False)
+
+    state_code = county_config.get("state_code", "53")
+
+    if not reload_graph:
+        if os.path.exists(os.path.join(indir, infile + ".annotated_graph.pickle")):
+            return nx.read_gpickle(os.path.join(indir, infile + ".annotated_graph.pickle"))
+        elif os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
+            return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
+        
+    G = nx.Graph()
+
+    with cd(indir):
+        with fiona.open(infile) as counties:
+            for shp in tqdm(counties, "Reading counties from shapefile"):
+                if shp['properties'].get("STATEFP") != state_code:
+                    continue
+                shape_obj = shape(shp['geometry'])
+
+                vertex_name = shp['properties'].get("GEOID")
+
+                G.add_node(vertex_name, shape=shape_obj)
+
+    # draw the input shapefile
+    if draw_shapefile:
+        plot_shapes([n[1]['shape'] for n in G.nodes(data=True)])
+
+    _connect_graph(G)
+
+    if draw_graph:
+        pos = {n[0] : [n[1]['shape'].centroid.x, n[1]['shape'].centroid.y]
+               for n in G.nodes(data=True)}
+        nx.draw_networkx(G, pos=pos)
+        plt.show()
+
+    if pickle:
+        nx.write_gpickle(G, os.path.join(indir, infile + ".graph.pickle"))
+
+    return G
+
 def create_block_group_graph(block_group_config):
     """Build a block group graph."""
  
@@ -147,7 +200,6 @@ def create_block_group_graph(block_group_config):
         elif os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
             return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
         
-
     G = nx.Graph()
 
     with cd(indir):

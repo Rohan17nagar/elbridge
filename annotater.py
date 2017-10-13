@@ -53,7 +53,6 @@ def add_election_data(data_config, precinct_config, block_graph):
                    "precinct area: " + str(precinct_shapes[st_code].area) + ", " + \
                    "block area sum: " + str(sum([i for _, i in blocks]))
 
-
 def add_precincts_bg(block_group_config, precinct_config, block_group_graph):
     """Match each block group in a graph to the precinct that contains it."""
     indir = block_group_config.get("directory", "wa-block-groups")
@@ -87,7 +86,8 @@ def add_precincts_bg(block_group_config, precinct_config, block_group_graph):
                            {block_group: value for block_group, value
                             in block_group_map.items()})
     if pickle:
-        nx.write_gpickle(block_group_graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
+        nx.write_gpickle(block_group_graph,
+                         os.path.join(indir, infile + ".annotated_graph.pickle"))
 
 def add_precincts_block(block_config, precinct_config, block_graph, block_group_graph):
     # pylint: disable=R0914
@@ -140,7 +140,36 @@ def add_precincts_block(block_config, precinct_config, block_graph, block_group_
     if pickle:
         nx.write_gpickle(block_graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
 
-    print("Found", count, "invalid or null blocks.")
+def add_census_data(config, graph):
+    """Add census data to graph."""
+    indir = config.get("directory")
+    infile = config.get("filename")
+
+    data_config = config.get("data", {})
+    data_indir = data_config.get("directory", "data")
+    data_infile = data_config.get("filename")
+
+    pickle = config.get("pickle_graph", True)
+
+    mapping = {}
+
+    if any(['pop' in data for _, data in graph.nodes(data=True)]):
+        return
+
+    with open(os.path.join(indir, data_indir, data_infile)) as data_file:
+        records = csv.reader(data_file)
+
+        next(records) # skip header
+        next(records) # skip plaintext header
+
+        for record in tqdm(records, "Reading records"):
+            [_, geoid, _, _, _, _, _, _, _, _, _, pop] = record
+            mapping[geoid] = int(pop)
+
+    nx.set_node_attributes(graph, 'pop', mapping)
+
+    if pickle:
+        nx.write_gpickle(graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
 
 def test(precinct_config, block_graph, block_group_graph):
     """Test!"""

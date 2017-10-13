@@ -50,35 +50,6 @@ class DisjointSet():
         return self[x]
 
     def __repr__(self):
-        return str(self.parents)
-
-def test():
-    """Test function."""
-    ds = DisjointSet(range(10))
-    assert len(ds) == 10, len(ds)
-
-    for i in range(0, 10, 2):
-        ds.union(i, i+1)
-
-    assert len(ds) == 5, len(ds)
-
-    for i in range(0, 10, 2):
-        assert ds[i] == ds[i+1]
-
-    for i in range(0, 8, 4):
-        ds.union(i, i+2)
-
-    assert len(ds) == 3, len(ds)
-
-    for i in range(0, 8, 4):
-        assert ds[i] == ds[i+2]
-        assert ds[i+1] == ds[i+2]
-        assert ds[i] == ds[i+3]
-        assert ds[i+1] == ds[i+3]
-
-if __name__ == "__main__":
-    test()
-
-
-
-
+        out = {v: [k for k in self.parents.keys() if self[k] == v]
+               for v in set(self.parents.values())}
+        return str(out) + " " + str(len(self))
