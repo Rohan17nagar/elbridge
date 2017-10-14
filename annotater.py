@@ -82,9 +82,10 @@ def add_precincts_bg(block_group_config, precinct_config, block_group_graph):
 
         assert found
 
-    nx.set_node_attributes(block_group_graph, 'precincts',
+    nx.set_node_attributes(block_group_graph,
                            {block_group: value for block_group, value
-                            in block_group_map.items()})
+                            in block_group_map.items()},
+                           name='precincts')
     if pickle:
         nx.write_gpickle(block_group_graph,
                          os.path.join(indir, infile + ".annotated_graph.pickle"))
@@ -116,9 +117,9 @@ def add_precincts_block(block_config, precinct_config, block_graph, block_group_
             continue
 
         block_group_name = block_name[:-3]
-        precincts_over_block_group = block_group_graph.node[block_group_name].get('precincts', [])
+        precincts_over_block_group = block_group_graph.nodes()[block_group_name].get('precincts', [])
 
-        block_obj = block_data['shape']
+        block_obj = block_data.get('shape')
         if block_obj is None or not block_obj.is_valid:
             count += 1
             continue
@@ -134,8 +135,9 @@ def add_precincts_block(block_config, precinct_config, block_graph, block_group_
                     intersection_area = precinct_obj.buffer(0).intersection(block_obj).area
                 block_map[block_name].append((st_code, intersection_area))
 
-    nx.set_node_attributes(block_graph, 'precincts',
-                           {block: value for block, value in block_map.items()})
+    nx.set_node_attributes(block_graph,
+                           {block: value for block, value in block_map.items()},
+                           name='precincts')
 
     if pickle:
         nx.write_gpickle(block_graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
@@ -166,7 +168,7 @@ def add_census_data(config, graph):
             [_, geoid, _, _, _, _, _, _, _, _, _, pop] = record
             mapping[geoid] = int(pop)
 
-    nx.set_node_attributes(graph, 'pop', mapping)
+    nx.set_node_attributes(graph, mapping, name='pop')
 
     if pickle:
         nx.write_gpickle(graph, os.path.join(indir, infile + ".annotated_graph.pickle"))

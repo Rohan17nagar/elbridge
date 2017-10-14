@@ -17,7 +17,8 @@ OBJECTIVES = None
 MUT_PB = None
 DISTRICTS = objectives.DISTRICTS
 
-tqdm = lambda x, *y: x
+# use this to mute tqdm
+# tqdm = lambda x, *y: x
 
 class Candidate():
     """
@@ -92,10 +93,9 @@ class Candidate():
         H.add_nodes_from(master.nodes(data=True))
 
         for _, i in order:
-            u, v = master.edges()[i]
+            u, v = list(master.edges())[i]
             H.add_edge(u, v)
             disjoint_set.union(u, v)
-            # print(u, v, disjoint_set)
             # nx.draw_networkx(H, pos={node: list(data.get('shape').centroid.coords)[0]
             #                          for node, data in H.nodes(data=True)})
             # plt.show()
@@ -107,14 +107,11 @@ class Candidate():
 def fast_non_dominated_sort(population):
     """Take a population P and sort it into fronts F1, F2, ..., Fn."""
     fronts = [[]]
-    print(population)
 
-    for p in tqdm(population, "Building domination sets..."):
+    for p in population:
         for q in population:
             if p == q:
                 continue
-
-            # print(p, q, p.dominates(q), q.dominates(p))
 
             if p.dominates(q):
                 p.dominated_set.add(q)
@@ -140,7 +137,6 @@ def fast_non_dominated_sort(population):
         i += 1
         fronts.append(next_front)
 
-    print(fronts)
     return fronts[:-1]
 
 def crowding_distance_assignment(frontier):
@@ -167,7 +163,7 @@ def make_adam_and_eve(block_graph, population_size):
     num_edges = len(block_graph.edges())
     parents = []
 
-    for _ in tqdm(range(population_size), "Building initial population..."):
+    for _ in range(population_size):
         chromosome = [random.random() for i in range(num_edges)]
         parents.append(Candidate(chromosome))
 
@@ -192,7 +188,7 @@ def select_parents(population):
 def make_children(parents):
     """Take a parent population and return an equally-sized child population."""
     children = []
-    for _ in tqdm(range(0, len(parents), 2), "Building next generation..."):
+    for _ in range(0, len(parents), 2):
         [parent_a, parent_b] = select_parents(parents)
         offspring = parent_a.crossover(parent_b)
         for child in offspring:
@@ -201,7 +197,7 @@ def make_children(parents):
         children += offspring
     return children
 
-def run(block_graph, max_generations=1000, pop_size=50, mutation_probability=0.02):
+def evolve(block_graph, max_generations=100, pop_size=10000, mutation_probability=0.2):
     """Runs NSGA-II."""
     # create first generation
     global MASTER_GRAPH
@@ -217,45 +213,48 @@ def run(block_graph, max_generations=1000, pop_size=50, mutation_probability=0.0
     offspring = make_children(parents)
     print("Finished building initial population.")
 
-    for _ in tqdm(range(1, max_generations), "Evolving..."):
-        combined_population = parents + offspring
-        frontiers = fast_non_dominated_sort(combined_population)
-        print(len(combined_population))
+    for gen in tqdm(range(1, max_generations), "Evolving..."):
+        try:
+            print("Beginning generation", gen)
+            combined_population = parents + offspring
+            frontiers = fast_non_dominated_sort(combined_population)
 
-        next_parents = []
-        remaining_slots = len(parents)
-        i = 0
-        
-        print("Building next frontier...")
-        print([len(frontier) for frontier in frontiers], sum([len(f) for f in frontiers]))
-        while i < len(frontiers):
-            frontier = frontiers[i]
-            if remaining_slots < len(frontier):
-                # continue until you can't add any more
-                break
+            print("Best element in generation", str(gen) + ":", str(frontiers[0][0]))
+            
+            next_parents = []
+            remaining_slots = len(parents)
+            i = 0
+            
+            print("Building next generation...")
+            while i < len(frontiers):
+                frontier = frontiers[i]
+                if remaining_slots < len(frontier):
+                    # continue until you can't add any more
+                    break
 
-            crowding_distance_assignment(frontier)
-            next_parents += frontier
+                crowding_distance_assignment(frontier)
+                next_parents += frontier
 
-            remaining_slots -= len(frontier)
-            i += 1
+                remaining_slots -= len(frontier)
+                i += 1
 
-        print(remaining_slots, len(frontiers), i)
+            print("Used", i-1, "frontiers.", remaining_slots, "slots \
+                    remaining.")
+            if remaining_slots != 0:
+                # fill the remaining slots with the best elements of frontier[i]
+                # this sorts x = (r1, d1) and y = (r2, d2) as x < y if r1 < r2 or r1 == r2 and d1 > d2
+                frontiers[i].sort(key=functools.cmp_to_key(crowding_operator))
+                next_parents += frontiers[i][:remaining_slots]
 
-        if remaining_slots != 0:
-            # fill the remaining slots with the best elements of frontier[i]
-            # this sorts x = (r1, d1) and y = (r2, d2) as x < y if r1 < r2 or r1 == r2 and d1 > d2
-            print(i, len(frontiers))
-            frontiers[i].sort(key=functools.cmp_to_key(crowding_operator))
-            next_parents += frontiers[i][:remaining_slots]
+            print("Finished building final generation.")
 
-        print("Finished building next frontier.")
-
-        parents = next_parents
-        print("Making children...")
-        offspring = make_children(parents)
-        print("Finished making children.")
-        print(len(parents), len(offspring), "\n\n")
+            parents = next_parents
+            print("Making children...")
+            offspring = make_children(parents)
+            print("Finished making children.")
+        except KeyboardInterrupt:
+            # stops at current generation
+            break
 
     frontiers = fast_non_dominated_sort(parents + offspring)
     best_frontier = frontiers[0]
@@ -266,7 +265,6 @@ def run(block_graph, max_generations=1000, pop_size=50, mutation_probability=0.0
 def plot_chromosome(chromosome):
     """Plots a chromosome."""
     graph = chromosome.reconstruct_graph()
-    print(len(graph))
     title = "Chromosome (" \
             + "; ".join(["{name}: {value}".format(name=str(fn),
                                                   value=fn(chromosome)) for fn in OBJECTIVES]) \

@@ -81,16 +81,15 @@ def _connect_subgraph(G, a_nodes, b_nodes, same=False):
     assert all([G.has_node(node) for node in a_nodes + b_nodes])
 
     for idx in tqdm(range(len(a_nodes)), "Discovering edges"):
-    # for i in tqdm(range(len(a_nodes))):
         n_name = a_nodes[idx]
-        n_data = G.node[n_name]
-        this = n_data['shape']
+        n_data = G.nodes()[n_name]
+        this = n_data.get('shape')
         has_connection = False
 
         # if a_nodes == b_nodes, don't need to compare anything in b_nodes[:i] to a_nodes[i]
         for o_name in b_nodes[idx:] if same else b_nodes:
-            o_data = G.node[o_name]
-            other = o_data['shape']
+            o_data = G.nodes()[o_name]
+            other = o_data.get('shape')
             if this is not other and this.touches(other):
                 has_connection = True
                 border = this.intersection(other)
@@ -103,13 +102,13 @@ def _connect_subgraph(G, a_nodes, b_nodes, same=False):
             # if this node is marooned, connect it to the closest object
             closest = min([node for node in a_nodes if node != n_name],
                           key=lambda o_name, t=this:
-                          t.centroid.distance(G.node[o_name]['shape'].centroid))
+                          t.centroid.distance(G.nodes()[o_name]['shape'].centroid))
             
             G.add_edge(n_name, closest, border=0.0)
 
 
 def _connect_graph(G):
-    _connect_subgraph(G, G.nodes(), G.nodes(), same=True)
+    _connect_subgraph(G, list(G.nodes()), list(G.nodes()), same=True)
 
 def get_precinct_shapes(precinct_config):
     """Get precincts from file."""

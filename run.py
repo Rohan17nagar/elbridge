@@ -9,7 +9,8 @@ import annotater
 from utils import cd
 import genetics
 
-def main(data_dir, block_group_config, block_config, county_config, election_config, precinct_config):
+def main(data_dir, block_group_config, block_config, county_config,
+         precinct_config):
     """Main function."""
 
     with cd(data_dir):
@@ -35,9 +36,7 @@ def main(data_dir, block_group_config, block_config, county_config, election_con
 
         print("Finished reading in all graphs.")
 
-        genetics.run(county_graph)
-        
-
+        genetics.evolve(county_graph)
 
 # pylint: disable=C0103
 if __name__ == "__main__":
@@ -106,11 +105,6 @@ if __name__ == "__main__":
         "draw_shapefile": False,
     })
 
-    election_configuration = config.get("elections", {
-        "directory": "wa-election-data",
-        "filename": "election-data.csv"
-    })
-
     data_directory = config.get("data_directory", "/var/local/rohan")
     main(data_directory, block_group_configuration, block_configuration,
-         county_configuration, election_configuration, precinct_configuration)
+         county_configuration, precinct_configuration)
