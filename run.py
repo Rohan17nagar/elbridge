@@ -14,22 +14,24 @@ def main(data_dir, block_group_config, block_config, county_config,
     """Main function."""
 
     with cd(data_dir):
-        # logging.debug("Creating block group graph...")
-        # block_group_graph = shape.create_block_group_graph(block_group_config)
-        # logging.debug("Block group graph created.")
+        logging.debug("Creating block group graph...")
+        block_group_graph = shape.create_block_group_graph(block_group_config)
+        logging.debug("Block group graph created.")
 
-        # logging.debug("Annotating block group graph with precincts...")
-        # annotater.add_precincts_bg(block_group_config, precinct_config, block_group_graph)
-        # logging.debug("Block group graph annotated.")
+        logging.debug("Annotating block group graph with precincts...")
+        annotater.add_precincts_bg(block_group_config, precinct_config, block_group_graph)
+        logging.debug("Block group graph annotated.")
 
-        # logging.debug("Creating block graph...")
-        # block_graph = shape.create_block_graph(block_config, block_group_graph)
-        # logging.debug("Block group created.")
+        logging.debug("Creating block graph...")
+        block_graph = shape.create_block_graph(block_config, block_group_graph)
+        logging.debug("Block group created.")
 
-        # logging.debug("Annotating block graph with precincts...")
-        # annotater.add_precincts_block(block_config, precinct_config,
-        #                               block_graph, block_group_graph)
-        # logging.debug("Block group annotated.")
+        logging.debug("Annotating block graph with precincts...")
+        annotater.add_precincts_block(block_config, precinct_config,
+                                      block_graph, block_group_graph)
+        logging.debug("Block group annotated.")
+
+        annotater.add_census_data_block(block_config, block_graph)
 
         county_graph = shape.create_county_graph(county_config)
         annotater.add_census_data(county_config, county_graph)

@@ -19,10 +19,15 @@ from tqdm import tqdm
 # utilities
 from utils import cd
 
-def plot_shapes(objects, random_color=False, show_centroids=False, title=""):
+def plot_graph(graph):
+    """Plots a block graph."""
+    nx.draw_networkx(graph, pos={node: list(data.get('shape').centroid.coords)[0] \
+            for node, data in graph.nodes(data=True)})
+    plt.show()
+
+def plot_shapes(objects, fig=plt.figure(), axes=None, random_color=False, show_centroids=False, title="", data=None):
     """Plots shapely shapes."""
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
+    ax = axes if axes else fig.add_subplot(111)
 
     # calculate plot bounds
     min_x = float('inf')
@@ -72,7 +77,7 @@ def plot_shapes(objects, random_color=False, show_centroids=False, title=""):
     plt.title(title)
 
     ax.set_aspect(1)
-    plt.show(fig)
+    plt.show(fig)        
 
 def _connect_subgraph(G, a_nodes, b_nodes, same=False):
     """Helper function. Connects graph."""
@@ -100,6 +105,9 @@ def _connect_subgraph(G, a_nodes, b_nodes, same=False):
 
         if same and not has_connection:
             # if this node is marooned, connect it to the closest object
+            sequence = [node for node in a_nodes if node != n_name]
+            if sequence == []:
+                continue
             closest = min([node for node in a_nodes if node != n_name],
                           key=lambda o_name, t=this:
                           t.centroid.distance(G.nodes()[o_name]['shape'].centroid))

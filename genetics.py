@@ -3,6 +3,8 @@
 
 import random
 import functools
+from multiprocessing import Pool
+from datetime import datetime
 
 from disjointset import DisjointSet
 import objectives
@@ -15,6 +17,7 @@ import matplotlib.pyplot as plt
 MASTER_GRAPH = None
 OBJECTIVES = None
 MUT_PB = None
+POOL = None
 DISTRICTS = objectives.DISTRICTS
 
 # use this to mute tqdm
@@ -28,7 +31,7 @@ class Candidate():
     is added to the graph.
     """
     i = 0
-    def __init__(self, edge_set):
+    def __init__(self, edge_set, copy=False):
         self.chromosome = edge_set
 
         # set of candidates this candidate dominates
@@ -40,13 +43,32 @@ class Candidate():
         # distance to other candidates on front
         self.distance = 0
 
-        self.objectives = [objective(self) for objective in OBJECTIVES]
-        
-        self.name = Candidate.i
-        Candidate.i += 1
+        self.graph = None
+
+        if copy:
+            self.objectives = []
+            self.name = None
+        else:
+            self.objectives = [objective(self) for objective in OBJECTIVES]
+            self.name = Candidate.i
+            Candidate.i += 1
 
     def __repr__(self):
         return str(self.name) + " (" + str(self.objectives) + ")"
+
+    def __eq__(self, other):
+        this_graph = self.reconstruct_graph()
+        other_graph = other.reconstruct_graph()
+
+        return this_graph.edges() == other_graph.edges()
+
+    def copy(self):
+        """Returns a copy of this chromosome."""
+        c = Candidate(self.chromosome, copy=True)
+        c.objectives = self.objectives
+        c.name = self.name
+        c.graph = self.graph
+        return c
 
     def dominates(self, other):
         """
@@ -71,7 +93,7 @@ class Candidate():
         chromosome_a = self.chromosome[:split_point] + other.chromosome[split_point:]
         chromosome_b = other.chromosome[:split_point] + self.chromosome[split_point:]
 
-        return (Candidate(chromosome_a), Candidate(chromosome_b))        
+        return (Candidate(chromosome_a), Candidate(chromosome_b))
 
     def mutate(self):
         """Mutate a Candidate solution in place."""
@@ -84,6 +106,9 @@ class Candidate():
 
         chromosome[i] corresponds to the priority of edge i.
         """
+        if self.graph:
+            return self.graph
+
         master = MASTER_GRAPH
         order = sorted([(priority, idx) for idx, priority in enumerate(self.chromosome)],
                        reverse=True)
@@ -96,39 +121,76 @@ class Candidate():
             u, v = list(master.edges())[i]
             H.add_edge(u, v)
             disjoint_set.union(u, v)
-            # nx.draw_networkx(H, pos={node: list(data.get('shape').centroid.coords)[0]
-            #                          for node, data in H.nodes(data=True)})
-            # plt.show()
 
             if len(disjoint_set) == DISTRICTS:
                 break
+
+        assert len(disjoint_set) == DISTRICTS, disjoint_set
+
+        self.graph = H
         return H
+
+    def plot(self):
+        """Plots a chromosome."""
+        graph = self.reconstruct_graph()
+        title = "Chromosome (" \
+                + "; ".join(["{name}: {value}"
+                             .format(name=str(OBJECTIVES[idx]), value=self.objectives[idx])
+                             for idx in range(len(OBJECTIVES))]) + ")"
+        shapes = []
+
+        print("Goal size:", sum([data.get('pop')
+                                 for _, data in graph.nodes(data=True)])/DISTRICTS)
+
+        for i, component in enumerate(nx.connected_component_subgraphs(graph)):
+            color = (random.random(), random.random(), random.random())
+            shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
+
+            print("Component", i)
+            print("\t",)
+            print("\n\t".join(["County {name}: population {pop}"
+                               .format(name=node, pop=data.get('pop'))
+                               for node, data in component.nodes(data=True)]))
+            print("Total population:",
+                  sum([data.get('pop') for _, data in component.nodes(data=True)]))
+
+        shape.plot_shapes(shapes, title=title)
+
+
+def _assign_rank(population, elem):
+    p = elem.copy()
+    tqdm = lambda a, *x: a
+    for i, q in tqdm(enumerate(population)):
+        if p == q:
+            continue
+
+        if p.dominates(q):
+            p.dominated_set.add(i)
+        elif q.dominates(p):
+            p.domination_count += 1
+
+    if p.domination_count == 0:
+        p.rank = 1
+
+    return p
 
 def fast_non_dominated_sort(population):
     """Take a population P and sort it into fronts F1, F2, ..., Fn."""
     fronts = [[]]
 
-    for p in population:
-        for q in population:
-            if p == q:
-                continue
+    pool = POOL
 
-            if p.dominates(q):
-                p.dominated_set.add(q)
-            elif q.dominates(p):
-                p.domination_count += 1
+    n_population = pool.map(functools.partial(_assign_rank, population), population)
 
-        if p.domination_count == 0:
-            # this candidate is in the first front (it isn't dominated by anything)
-            p.rank = 1
-            fronts[0].append(p)
+    fronts[0] = [p for p in n_population if p.rank == 1]
 
     i = 0
     # pylint: disable=C1801
     while len(fronts[i]) != 0:
         next_front = []
         for p in fronts[i]:
-            for q in p.dominated_set:
+            for idx in p.dominated_set:
+                q = n_population[idx]
                 q.domination_count -= 1
                 if q.domination_count == 0:
                     q.rank = i + 1
@@ -137,35 +199,43 @@ def fast_non_dominated_sort(population):
         i += 1
         fronts.append(next_front)
 
+    # print("\n".join(map(str, fronts)))
+
+    # print([(len(front), front[0]) for front in fronts[:-1]])
     return fronts[:-1]
 
 def crowding_distance_assignment(frontier):
     """Take a Pareto frontier and calculate distances between candidates."""
-    for objective in OBJECTIVES:
-        frontier.sort(key=objective)
+    for idx, _ in enumerate(OBJECTIVES):
+        frontier.sort(key=lambda p, idx=idx: p.objectives[idx])
 
         # the boundary points for each objective should always be preserved
         frontier[0].distance = float('inf')
         frontier[-1].distance = float('inf')
 
         for i, _ in enumerate(frontier[1:-1]):
-            frontier[i].distance += (objective(frontier[i+1]) - objective(frontier[i-1])) \
-                                    / (objective.max_value - objective.min_value)
+            frontier[i].distance += (frontier[i+1].objectives[idx] \
+                - frontier[i-1].objectives[idx]) \
+                / (OBJECTIVES[idx].max_value - OBJECTIVES[idx].min_value)
 
 def crowding_operator(p, q):
     """Return 1 if p << q; -1 otherwise. Used to sort last frontier."""
     if (p.rank < q.rank) or ((p.rank == q.rank) and (p.distance > q.distance)):
-        return 1
-    return -1
+        return -1
+    return 1
 
-def make_adam_and_eve(block_graph, population_size):
+def make_adam_and_eve(graph, population_size):
     """Makes the first generation."""
-    num_edges = len(block_graph.edges())
+    num_edges = len(graph.edges())
     parents = []
 
-    for _ in range(population_size):
-        chromosome = [random.random() for i in range(num_edges)]
-        parents.append(Candidate(chromosome))
+    pool = POOL
+    parents = pool.map(Candidate, [[random.random() for i in range(num_edges)] \
+        for _ in range(population_size)])
+
+    # for _ in range(population_size):
+    #     chromosome = [random.random() for i in range(num_edges)]
+    #     parents.append(Candidate(chromosome))
 
     return parents
 
@@ -177,47 +247,64 @@ def select_parents(population):
     parents = [None, None]
     for i in range(2):
         # pick two elements of the population
+        # parents[i] = max(random.sample(population, 2),
+        #                  key=functools.cmp_to_key(crowding_operator))
         [parent_a, parent_b] = random.sample(population, 2)
-        if crowding_operator(parent_a, parent_b) == 1:
+        if crowding_operator(parent_a, parent_b) == -1:
             parents[i] = parent_a
         else:
             parents[i] = parent_b
 
     return parents
 
+def _make_children(parents):
+    [parent_a, parent_b] = parents
+    offspring = parent_a.crossover(parent_b)
+    for child in offspring:
+        child.mutate()
+
+    return offspring
+
 def make_children(parents):
     """Take a parent population and return an equally-sized child population."""
-    children = []
-    for _ in range(0, len(parents), 2):
-        [parent_a, parent_b] = select_parents(parents)
-        offspring = parent_a.crossover(parent_b)
-        for child in offspring:
-            child.mutate()
+    pool = POOL
+    children = pool.map(_make_children, [select_parents(parents)] * (len(parents) // 2))
+    return [child for sublist in children for child in sublist]
 
-        children += offspring
-    return children
-
-def evolve(block_graph, max_generations=100, pop_size=10000, mutation_probability=0.2):
+def evolve(graph, max_generations=5, pop_size=300, mutation_probability=0.7):
+    # pylint: disable=R0915, W0603, R0914
     """Runs NSGA-II."""
-    # create first generation
     global MASTER_GRAPH
-    MASTER_GRAPH = block_graph
+    MASTER_GRAPH = graph
 
     global OBJECTIVES
-    OBJECTIVES = [obj(block_graph) for obj in objectives.OBJECTIVES]
+    OBJECTIVES = [obj(graph) for obj in objectives.OBJECTIVES]
 
     global MUT_PB
     MUT_PB = mutation_probability
 
-    parents = make_adam_and_eve(block_graph, pop_size)
+    global POOL
+    POOL = Pool(4)
+
+    print("Starting NSGA-II. Running for {gens} generations with a population of {pop}."
+          .format(gens=max_generations, pop=pop_size))
+
+    stime = datetime.now()
+    print("Building initial population...")
+    parents = make_adam_and_eve(graph, pop_size)
     offspring = make_children(parents)
-    print("Finished building initial population.")
+    etime = datetime.now()
+    print("Finished building initial population. Time:", etime - stime)
 
     for gen in tqdm(range(1, max_generations), "Evolving..."):
         try:
-            print("Beginning generation", gen)
+            print("######### START OF GENERATION", gen + 1, "########")
+            gen_stime = datetime.now()
             combined_population = parents + offspring
+            sort_stime = datetime.now()
             frontiers = fast_non_dominated_sort(combined_population)
+            sort_etime = datetime.now()
+            print("Finished sorting in", str(sort_etime - sort_stime))
 
             print("Best element in generation", str(gen) + ":", str(frontiers[0][0]))
             
@@ -238,41 +325,47 @@ def evolve(block_graph, max_generations=100, pop_size=10000, mutation_probabilit
                 remaining_slots -= len(frontier)
                 i += 1
 
-            print("Used", i-1, "frontiers.", remaining_slots, "slots \
-                    remaining.")
+            print("Used", i, "frontiers.", remaining_slots, "slots remaining.")
             if remaining_slots != 0:
                 # fill the remaining slots with the best elements of frontier[i]
-                # this sorts x = (r1, d1) and y = (r2, d2) as x < y if r1 < r2 or r1 == r2 and d1 > d2
+                # this sorts x = (r1, d1) and y = (r2, d2) as x < y
+                # if r1 < r2 or r1 == r2 and d1 > d2
                 frontiers[i].sort(key=functools.cmp_to_key(crowding_operator))
                 next_parents += frontiers[i][:remaining_slots]
 
-            print("Finished building final generation.")
+            print("Finished building new parents.")
 
             parents = next_parents
             print("Making children...")
+            child_stime = datetime.now()
             offspring = make_children(parents)
-            print("Finished making children.")
+            child_etime = datetime.now()
+            print("Finished making children in", str(child_etime - child_stime))
+            gen_etime = datetime.now()
+            print("######## END OF GENERATION", gen + 1,
+                  "(time: " + str(gen_etime - gen_stime) + ") ########")
+            MUT_PB *= 0.9
         except KeyboardInterrupt:
             # stops at current generation
             break
 
-    frontiers = fast_non_dominated_sort(parents + offspring)
-    best_frontier = frontiers[0]
+    POOL.close()
+    POOL.join()
 
-    for chromosome in best_frontier:
-        plot_chromosome(chromosome)
+    print()
+    print("Finished running NSGA-II. Best candidate:", frontiers[0][0])
 
-def plot_chromosome(chromosome):
-    """Plots a chromosome."""
-    graph = chromosome.reconstruct_graph()
-    title = "Chromosome (" \
-            + "; ".join(["{name}: {value}".format(name=str(fn),
-                                                  value=fn(chromosome)) for fn in OBJECTIVES]) \
-            + ")"
-    shapes = []
-    for component in nx.connected_component_subgraphs(graph):
-        color = (random.random(), random.random(), random.random())
-        shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
+    for chromosome in frontiers[0]:
+        # nx.draw(chromosome.reconstruct_graph(), with_labels=True)
+        # plt.show()
+        chromosome.plot()
 
-    shape.plot_shapes(shapes, title=title)
+
     
+def test():
+    """Testing function."""
+    graph = nx.grid_graph([3, 3])
+    evolve(graph)
+
+if __name__ == "__main__":
+    test()

@@ -8,6 +8,7 @@ from collections import defaultdict
 import networkx as nx
 from tqdm import tqdm
 from shapely.geos import TopologicalError
+import fiona
 
 import shape
 
@@ -117,7 +118,8 @@ def add_precincts_block(block_config, precinct_config, block_graph, block_group_
             continue
 
         block_group_name = block_name[:-3]
-        precincts_over_block_group = block_group_graph.nodes()[block_group_name].get('precincts', [])
+        precincts_over_block_group = block_group_graph.nodes()[block_group_name].get('precincts',
+                                                                                     [])
 
         block_obj = block_data.get('shape')
         if block_obj is None or not block_obj.is_valid:
@@ -167,6 +169,32 @@ def add_census_data(config, graph):
         for record in tqdm(records, "Reading records"):
             [_, geoid, _, _, _, _, _, _, _, _, _, pop] = record
             mapping[geoid] = int(pop)
+
+    nx.set_node_attributes(graph, mapping, name='pop')
+
+    if pickle:
+        nx.write_gpickle(graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
+
+def add_census_data_block(config, graph):
+    """Add census data to graph."""
+    indir = config.get("directory")
+    infile = config.get("filename")
+
+    data_config = config.get("data", {})
+    data_indir = data_config.get("directory", "data")
+    data_infile = data_config.get("filename")
+
+    pickle = config.get("pickle_graph", True)
+
+    mapping = {}
+
+    if any(['pop' in data for _, data in graph.nodes(data=True)]):
+        return
+
+    with fiona.open(os.path.join(indir, data_indir, data_infile)) as blocks:
+        for shp in tqdm(blocks, "Reading blocks"):
+            geoid = shp.get('properties', {}).get('BLOCKID10')
+            mapping[geoid] = shp.get('properties', {}).get('POP10', 0)
 
     nx.set_node_attributes(graph, mapping, name='pop')
 

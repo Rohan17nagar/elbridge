@@ -22,7 +22,7 @@
 		"reload_graph": false,
 		"data": {
 			"directory": "data",
-			"filename": "blocks.csv"
+			"filename": "block-pop.shp"
 		}
 	},
 	"counties": {
