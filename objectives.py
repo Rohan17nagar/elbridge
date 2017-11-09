@@ -18,10 +18,8 @@ class PopulationEquality():
     def __repr__(self):
         return "Population equality"
 
-    def __call__(self, chromosome):
-        """Returns the mean absolute deviation of subgraph population."""
-        graph = chromosome.reconstruct_graph()
-        
+    def __call__(self, graph):
+        """Returns the mean absolute deviation of subgraph population."""        
         components = nx.connected_component_subgraphs(graph)
 
         goal = self.total_pop / DISTRICTS
@@ -45,10 +43,8 @@ class SizeEquality():
     def __repr__(self):
         return "Size equality"
 
-    def __call__(self, chromosome):
-        """Returns the mean absolute deviation of subgraph population."""
-        graph = chromosome.reconstruct_graph()
-        
+    def __call__(self, graph):
+        """Returns the mean absolute deviation of subgraph population."""        
         components = nx.connected_component_subgraphs(graph)
 
         goal = len(graph) / DISTRICTS # average of n/d nodes per component

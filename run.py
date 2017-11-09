@@ -3,11 +3,14 @@ import logging
 import argparse
 import json
 from datetime import datetime
+import random
+import networkx as nx
 
 import shape
 import annotater
 from utils import cd
 import genetics
+import search
 
 def main(data_dir, block_group_config, block_config, county_config,
          precinct_config):
@@ -38,7 +41,37 @@ def main(data_dir, block_group_config, block_config, county_config,
 
         print("Finished reading in all graphs.")
 
-        genetics.evolve(county_graph)
+        best_solutions = genetics.evolve(county_graph)
+        for soln in best_solutions:
+            graph, hypotheticals = soln.to_block_level(block_graph)
+            graph, hypotheticals, scores = search.optimize(graph, hypotheticals)
+
+            title = "Chromosome (" \
+                + "; ".join(["{value}"
+                             .format(value=scores[idx])
+                             for idx in range(len(scores))]) + ")"
+            shapes = []
+            count = 0
+
+            for i, component in enumerate(nx.connected_component_subgraphs(graph)):
+                color = (random.random(), random.random(), random.random())
+                shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
+
+                print("Component", i)
+                # print("\n".join(["\tCounty {name}: population {pop}"
+                #                  .format(name=node, pop=data.get('pop'))
+                #                  for node, data in component.nodes(data=True)]))
+                print("Total population:",
+                      sum([data.get('pop') for _, data in component.nodes(data=True)]))
+                print()
+                count += 1
+
+            print("Goal size:", sum([data.get('pop')
+                                     for _, data in graph.nodes(data=True)])/count)
+
+            shape.plot_shapes(shapes, title=title)
+
+
 
 # pylint: disable=C0103
 if __name__ == "__main__":

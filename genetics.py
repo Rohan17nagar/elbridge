@@ -7,12 +7,12 @@ from multiprocessing import Pool
 from datetime import datetime
 
 from disjointset import DisjointSet
-import objectives
 import shape
+import objectives
+import search
 
 import networkx as nx
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
 MASTER_GRAPH = None
 OBJECTIVES = None
@@ -31,7 +31,7 @@ class Candidate():
     is added to the graph.
     """
     i = 0
-    def __init__(self, edge_set, copy=False):
+    def __init__(self, edge_set, copy=False, mutation_probability=0.7):
         self.chromosome = edge_set
 
         # set of candidates this candidate dominates
@@ -43,13 +43,16 @@ class Candidate():
         # distance to other candidates on front
         self.distance = 0
 
+        self.mutation_probability = mutation_probability
+
         self.graph = None
+        self.hypotheticals = set()
 
         if copy:
             self.objectives = []
             self.name = None
         else:
-            self.objectives = [objective(self) for objective in OBJECTIVES]
+            self.objectives = [objective(self.reconstruct_graph()) for objective in OBJECTIVES]
             self.name = Candidate.i
             Candidate.i += 1
 
@@ -57,18 +60,19 @@ class Candidate():
         return str(self.name) + " (" + str(self.objectives) + ")"
 
     def __eq__(self, other):
-        this_graph = self.reconstruct_graph()
-        other_graph = other.reconstruct_graph()
+        return self.chromosome == other.chromosome
+        # this_graph = self.reconstruct_graph()
+        # other_graph = other.reconstruct_graph()
 
-        return this_graph.edges() == other_graph.edges()
+        # return this_graph.edges() == other_graph.edges()
 
     def copy(self):
         """Returns a copy of this chromosome."""
-        c = Candidate(self.chromosome, copy=True)
-        c.objectives = self.objectives
-        c.name = self.name
-        c.graph = self.graph
-        return c
+        copy = Candidate(self.chromosome, copy=True)
+        copy.objectives = self.objectives
+        copy.name = self.name
+        copy.graph = self.graph
+        return copy
 
     def dominates(self, other):
         """
@@ -97,7 +101,7 @@ class Candidate():
 
     def mutate(self):
         """Mutate a Candidate solution in place."""
-        if random.random() < MUT_PB:
+        if random.random() < self.mutation_probability:
             element = random.randint(0, len(self.chromosome)-1)
             self.chromosome[element] = random.random()
 
@@ -116,14 +120,29 @@ class Candidate():
 
         H = nx.Graph()
         H.add_nodes_from(master.nodes(data=True))
+        i = 0
+
+        hypotheticals = set(master.edges())
 
         for _, i in order:
             u, v = list(master.edges())[i]
+            hypotheticals.remove((u, v))
             H.add_edge(u, v)
             disjoint_set.union(u, v)
 
             if len(disjoint_set) == DISTRICTS:
                 break
+
+        components = nx.connected_components(H)
+        for component in components:
+            original_subgraph = master.subgraph(component)
+            for edge in original_subgraph.edges():
+                if not H.has_edge(*edge):
+                    # this is an edge in the original inside a component
+                    H.add_edge(*edge)
+                    hypotheticals.remove(edge)
+
+        self.hypotheticals = hypotheticals
 
         assert len(disjoint_set) == DISTRICTS, disjoint_set
 
@@ -147,16 +166,54 @@ class Candidate():
             shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
 
             print("Component", i)
-            print("\t",)
-            print("\n\t".join(["County {name}: population {pop}"
-                               .format(name=node, pop=data.get('pop'))
-                               for node, data in component.nodes(data=True)]))
+            print("\n".join(["\tCounty {name}: population {pop}"
+                             .format(name=node, pop=data.get('pop'))
+                             for node, data in component.nodes(data=True)]))
             print("Total population:",
                   sum([data.get('pop') for _, data in component.nodes(data=True)]))
+            print()
 
         shape.plot_shapes(shapes, title=title)
 
+    def to_block_level(self, block_graph):
+        """Given a block graph, only keep connections between blocks in the same component."""
+        county_graph = self.reconstruct_graph()
+        county_districts = nx.connected_components(county_graph)
 
+        # county --> index of district
+        county_to_district = {}
+        for i, component in enumerate(county_districts):
+            for node in component:
+                county_to_district[node] = i
+        
+        output = block_graph.copy()
+
+        hypotheticals = set()
+        
+        # remove edge (i,j) if c2d[i] != c2d[j]
+        edges = list(output.edges())
+        for i, j in edges:
+            county = lambda n: n[:5]
+            if county_to_district[county(i)] != county_to_district[county(j)]:
+                output.remove_edge(i, j)
+                hypotheticals.add((i, j))
+
+        return output, hypotheticals
+
+    def optimize(self):
+        """Local search."""
+        graph = self.reconstruct_graph()
+        hypotheticals = self.hypotheticals
+
+        evolved_graph, evolved_hypotheticals, scores = search.optimize(graph,
+                                                                       hypotheticals,
+                                                                       steps=20)
+        self.graph = evolved_graph
+        self.hypotheticals = evolved_hypotheticals
+        self.objectives = scores
+
+
+# @profile
 def _assign_rank(population, elem):
     p = elem.copy()
     tqdm = lambda a, *x: a
@@ -180,7 +237,8 @@ def fast_non_dominated_sort(population):
 
     pool = POOL
 
-    n_population = pool.map(functools.partial(_assign_rank, population), population)
+    n_population = list(map(functools.partial(_assign_rank, population),
+                            population))
 
     fronts[0] = [p for p in n_population if p.rank == 1]
 
@@ -271,7 +329,7 @@ def make_children(parents):
     children = pool.map(_make_children, [select_parents(parents)] * (len(parents) // 2))
     return [child for sublist in children for child in sublist]
 
-def evolve(graph, max_generations=5, pop_size=300, mutation_probability=0.7):
+def evolve(graph, max_generations=100, pop_size=300, mutation_probability=0.7):
     # pylint: disable=R0915, W0603, R0914
     """Runs NSGA-II."""
     global MASTER_GRAPH
@@ -296,6 +354,8 @@ def evolve(graph, max_generations=5, pop_size=300, mutation_probability=0.7):
     etime = datetime.now()
     print("Finished building initial population. Time:", etime - stime)
 
+    best_scores = []
+
     for gen in tqdm(range(1, max_generations), "Evolving..."):
         try:
             print("######### START OF GENERATION", gen + 1, "########")
@@ -307,6 +367,7 @@ def evolve(graph, max_generations=5, pop_size=300, mutation_probability=0.7):
             print("Finished sorting in", str(sort_etime - sort_stime))
 
             print("Best element in generation", str(gen) + ":", str(frontiers[0][0]))
+            best_scores.append(frontiers[0][0].objectives)
             
             next_parents = []
             remaining_slots = len(parents)
@@ -336,15 +397,18 @@ def evolve(graph, max_generations=5, pop_size=300, mutation_probability=0.7):
             print("Finished building new parents.")
 
             parents = next_parents
+
             print("Making children...")
             child_stime = datetime.now()
             offspring = make_children(parents)
+            # for child in tqdm(offspring, desc="Optimizing"):
+            #     child.optimize()
             child_etime = datetime.now()
             print("Finished making children in", str(child_etime - child_stime))
             gen_etime = datetime.now()
             print("######## END OF GENERATION", gen + 1,
                   "(time: " + str(gen_etime - gen_stime) + ") ########")
-            MUT_PB *= 0.9
+            MUT_PB *= 0.99
         except KeyboardInterrupt:
             # stops at current generation
             break
@@ -355,12 +419,9 @@ def evolve(graph, max_generations=5, pop_size=300, mutation_probability=0.7):
     print()
     print("Finished running NSGA-II. Best candidate:", frontiers[0][0])
 
-    for chromosome in frontiers[0]:
-        # nx.draw(chromosome.reconstruct_graph(), with_labels=True)
-        # plt.show()
-        chromosome.plot()
+    # frontiers[0][0].plot()
 
-
+    return frontiers[0]
     
 def test():
     """Testing function."""
