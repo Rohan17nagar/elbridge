@@ -1,7 +1,6 @@
 # pylint: disable=C0103, C0200
 """Local search."""
 
-from collections import defaultdict
 import random
 import pprint
 
@@ -11,34 +10,147 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from objectives import OBJECTIVES, DISTRICTS
+import shape
+
+class State():
+    """Encapsulates a state."""
+
+    objectives = []
+
+    def __init__(self, graph, hypotheticals, scores):
+        if not State.objectives:
+            raise Exception("Class State not initalized!")
+        self.graph = graph
+        self.hypotheticals = hypotheticals
+        self.scores = scores
+
+    @staticmethod
+    def from_candidate(candidate, block_graph):
+        """Given a block graph, only keep connections between blocks in the same component."""
+        county_graph = candidate.reconstruct_graph()
+        county_districts = nx.connected_components(county_graph)
+
+        # county --> index of district
+        county_to_district = {}
+        for i, component in enumerate(county_districts):
+            for node in component:
+                county_to_district[node] = i
+        
+        graph = block_graph.copy()
+
+        hypotheticals = set()
+        
+        # remove edge (i,j) if c2d[i] != c2d[j]
+        edges = list(graph.edges())
+        for i, j in edges:
+            county = lambda n: n[:5]
+            if county_to_district[county(i)] != county_to_district[county(j)]:
+                graph.remove_edge(i, j)
+                hypotheticals.add((i, j))
+
+        return State(graph, hypotheticals, candidate.scores)   
+
+    def dominated_by(self, other_scores):
+        """Returns true if some scores dominate our score."""
+        as_good = True
+        better = False
+        for idx in range(len(self.scores)):
+            if self.scores[idx] < other_scores[idx]:
+                as_good = False
+                break
+            elif self.scores[idx] > other_scores[idx]:
+                better = True
+
+        return as_good and better
+
+    def best_neighbors(self, sample_size):
+        """Find the best neighbors of this state."""
+        samples = random.sample(self.hypotheticals, min(len(self.hypotheticals), sample_size))
+
+        neighbors = []
+
+        for i, j in samples:
+            adds = set() # everything added to hypotheticals
+            removes = set() # everything removed from hypotheticals
+            
+            # get the neighbors of j
+            j_edges = list(self.graph.edges(j))
+            for edge in j_edges:
+                # remove them from the graph
+                self.graph.remove_edge(*edge)
+
+                # add them to the hypothetical set
+                self.hypotheticals.add(edge)
+                adds.add(edge)
+
+            # add (i, j) to graph
+            self.graph.add_edge(i, j)
+
+            # remove (i, j) from hypotheticals
+            self.hypotheticals.remove((i, j))
+            removes.add((i, j))
+
+            # add (i', j) to graph, where i' is in the cc of i and (i', j) is in hypotheticals
+            for node in nx.node_connected_component(self.graph, i):
+                if (node, j) in self.hypotheticals:
+                    self.graph.add_edge(node, j)
+                    self.hypotheticals.remove((node, j))
+                    removes.add((node, j))
+                elif (j, node) in self.hypotheticals:
+                    self.graph.add_edge(j, node)
+                    self.hypotheticals.remove((j, node))
+                    removes.add((j, node))
+
+            if nx.number_connected_components(self.graph) == DISTRICTS:
+                # evaluate
+                cand_scores = [objective(self.graph) for objective in State.objectives]
+
+                if self.dominated_by(cand_scores):
+                    # print("Dominator found!", "old:", scores, "new:", cand_scores)
+                    neighbors.append(State(self.graph.copy(), self.hypotheticals.copy(),
+                                           cand_scores))
+
+            self.hypotheticals = self.hypotheticals.union(removes).difference(adds)
+            self.graph.add_edges_from(adds)
+            self.graph.remove_edges_from(removes)
+
+        return neighbors
+
+    def plot(self):
+        """Plot this state."""
+        title = "Chromosome (" \
+                + "; ".join(["{name}: {value}".format(name=str(State.objectives[idx]), value=score)
+                             for idx, score in enumerate(self.scores)]) + ")"
+        shapes = []
+        count = 0
+
+        for i, component in enumerate(nx.connected_component_subgraphs(self.graph)):
+            color = (random.random(), random.random(), random.random())
+            shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
+
+            print("Component", i)
+            print("Total population:",
+                  sum([data.get('pop') for _, data in component.nodes(data=True)]))
+            print()
+            count += 1
+
+        print("Goal size:", sum([data.get('pop')
+                                 for _, data in self.graph.nodes(data=True)]) / count)
+
+        shape.plot_shapes(shapes, title=title)
 
 def to_input(candidates):
     """Take a set of candidates and find dependencies."""
     # candidate x is dominated by candidates output[x]
     output = {i : set() for i in range(len(candidates))}
     for i, cand in enumerate(candidates):
-        _, _, scores, _ = cand
         for j, o_cand in enumerate(candidates):
-            _, _, o_scores, _ = o_cand
-
-            if dominates(scores, o_scores):
+            if o_cand.dominated_by(cand.scores):
                 output[j].add(i)
     return output
 
-def dominates(this_scores, other_scores):
-    """Returns true if this dominates other."""
-    as_good = True
-    better = False
-    for idx in range(len(this_scores)):
-        if this_scores[idx] < other_scores[idx]:
-            as_good = False
-            break
-        elif this_scores[idx] > other_scores[idx]:
-            better = True
-
-    return as_good and better
-
 def draw_and_highlight(block_graph, *nodes):
+    """Highlight a node."""
     index = lambda node: list(block_graph.nodes()).index(node)
     colors = ['r'] * len(block_graph)
     for i in nodes:
@@ -50,69 +162,19 @@ def draw_and_highlight(block_graph, *nodes):
     plt.show()
 
 @profile
-def optimize(block_graph, hypotheticals, steps=1000, sample_size=1000):
+def optimize(candidate, block_graph, steps=1000, sample_size=1000):
     """Take a solution and return a nearby local maximum."""
 
-    objectives = [objective(block_graph) for objective in OBJECTIVES]
+    State.objectives = [objective(block_graph) for objective in OBJECTIVES]
+    print("Finished generating objectives.")
 
-    for _ in range(steps):
-        candidates = []
+    state = State.from_candidate(candidate, block_graph)
 
-        scores = [objective(block_graph) for objective in objectives]
-
-        for i, j in random.sample(hypotheticals, min(len(hypotheticals), sample_size)):
-            
-            if nx.has_path(block_graph, i, j):
-                draw_and_highlight(block_graph, i, j)
-                raise Exception()
-
-            adds = set() # everything added to hypotheticals
-            removes = set() # everything removed from hypotheticals
-            
-            # get the neighbors of j
-            j_edges = list(block_graph.edges(j))
-            for edge in j_edges:
-                # remove them from the graph
-                block_graph.remove_edge(*edge)
-
-                # add them to the hypothetical set
-                hypotheticals.add(edge)
-                adds.add(edge)
-
-            # add (i, j) to graph
-            block_graph.add_edge(i, j)
-
-            # remove (i, j) from hypotheticals
-            hypotheticals.remove((i, j))
-            removes.add((i, j))
-
-            # add (i', j) to graph, where i' is in the cc of i and (i', j) is in hypotheticals
-            for node in nx.node_connected_component(block_graph, i):
-                if (node, j) in hypotheticals:
-                    block_graph.add_edge(node, j)
-                    hypotheticals.remove((node, j))
-                    removes.add((node, j))
-                elif (j, node) in hypotheticals:
-                    block_graph.add_edge(j, node)
-                    hypotheticals.remove((j, node))
-                    removes.add((j, node))
-
-            if nx.number_connected_components(block_graph) == DISTRICTS:
-                # evaluate
-                cand_scores = [objective(block_graph) for objective in objectives]
-
-                if dominates(cand_scores, scores):
-                    # print("Dominator found!", "old:", scores, "new:", cand_scores)
-                    candidates.append((block_graph.copy(), hypotheticals.copy(),
-                                       cand_scores, (i, j)))
-
-            hypotheticals = hypotheticals.union(removes).difference(adds)
-            block_graph.add_edges_from(adds)
-            block_graph.remove_edges_from(removes)
+    for _ in tqdm(range(steps), "Optimizing"):
+        candidates = state.best_neighbors(sample_size)
 
         if not candidates:
-            return block_graph, hypotheticals, scores
-        # print(len(candidates))
+            return state
 
         # candidates now contains every potential step
         # sort it into frontiers
@@ -121,10 +183,9 @@ def optimize(block_graph, hypotheticals, steps=1000, sample_size=1000):
             pprint.pprint(candidates)
 
         # randomly choose something from the best frontier
-        block_graph, hypotheticals, scores, nodes = candidates[random.choice(tuple(frontiers[0]))]
-        # draw_and_highlight(block_graph, *nodes)
+        state = candidates[random.choice(tuple(frontiers[0]))]
 
-    return block_graph, hypotheticals, scores
+    return state
 
 
 

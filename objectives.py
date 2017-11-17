@@ -12,24 +12,29 @@ class PopulationEquality():
     def __init__(self, graph):
         self.total_pop = sum([data.get('pop', 0) for _, data in
                               graph.nodes(data=True)])
-        self.max_value = statistics.stdev([0] * (len(graph) - 1) + [self.total_pop])
-        self.min_value = 0
+        self.min_value = -1 * statistics.stdev([0] * (len(graph) - 1) + [self.total_pop])
+        self.max_value = 0
 
     def __repr__(self):
         return "Population equality"
 
-    def __call__(self, graph):
+    @profile
+    def __call__(self, graph, per_component=False):
         """Returns the mean absolute deviation of subgraph population."""        
-        components = nx.connected_component_subgraphs(graph)
+        components = nx.connected_components(graph)
 
         goal = self.total_pop / DISTRICTS
         score = 0
         count = 0
+        comp_scores = []
         for component in components:
-            size = sum([data.get('pop') for _, data in component.nodes(data=True)])
+            size = sum([graph.node[i].get('pop') for i in component])
             score += abs(size - goal)
+            comp_scores.append(score)
             count += 1
         assert count == DISTRICTS, count
+        if per_component:
+            return -1 * score, comp_scores
         return -1 * score
 
 class SizeEquality():
@@ -37,8 +42,8 @@ class SizeEquality():
     """Test size equality. For testing purposes only"""
     def __init__(self, graph):
         self.total_pop = len(graph)
-        self.max_value = statistics.stdev([0] * (len(graph) - 1) + [self.total_pop])
-        self.min_value = 0
+        self.min_value = -1 * statistics.stdev([0] * (len(graph) - 1) + [self.total_pop])
+        self.max_value = 0
 
     def __repr__(self):
         return "Size equality"

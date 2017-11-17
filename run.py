@@ -3,8 +3,6 @@ import logging
 import argparse
 import json
 from datetime import datetime
-import random
-import networkx as nx
 
 import shape
 import annotater
@@ -34,6 +32,7 @@ def main(data_dir, block_group_config, block_config, county_config,
                                       block_graph, block_group_graph)
         logging.debug("Block group annotated.")
 
+        annotater.add_census_data(block_group_config, block_group_graph)
         annotater.add_census_data_block(block_config, block_graph)
 
         county_graph = shape.create_county_graph(county_config)
@@ -41,37 +40,14 @@ def main(data_dir, block_group_config, block_config, county_config,
 
         print("Finished reading in all graphs.")
 
-        best_solutions = genetics.evolve(county_graph)
+        best_solutions = genetics.evolve(block_group_graph)
+
+        print("Finished evolution.")
         for soln in best_solutions:
-            graph, hypotheticals = soln.to_block_level(block_graph)
-            graph, hypotheticals, scores = search.optimize(graph, hypotheticals)
+            optimized_state = search.optimize(soln, block_graph)
+            print("Finished optimizing", soln)
 
-            title = "Chromosome (" \
-                + "; ".join(["{value}"
-                             .format(value=scores[idx])
-                             for idx in range(len(scores))]) + ")"
-            shapes = []
-            count = 0
-
-            for i, component in enumerate(nx.connected_component_subgraphs(graph)):
-                color = (random.random(), random.random(), random.random())
-                shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
-
-                print("Component", i)
-                # print("\n".join(["\tCounty {name}: population {pop}"
-                #                  .format(name=node, pop=data.get('pop'))
-                #                  for node, data in component.nodes(data=True)]))
-                print("Total population:",
-                      sum([data.get('pop') for _, data in component.nodes(data=True)]))
-                print()
-                count += 1
-
-            print("Goal size:", sum([data.get('pop')
-                                     for _, data in graph.nodes(data=True)])/count)
-
-            shape.plot_shapes(shapes, title=title)
-
-
+            optimized_state.plot()
 
 # pylint: disable=C0103
 if __name__ == "__main__":

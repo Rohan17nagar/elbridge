@@ -167,7 +167,7 @@ def add_census_data(config, graph):
         next(records) # skip plaintext header
 
         for record in tqdm(records, "Reading records"):
-            [_, geoid, _, _, _, _, _, _, _, _, _, pop] = record
+            [_, geoid, _, pop, _] = record
             mapping[geoid] = int(pop)
 
     nx.set_node_attributes(graph, mapping, name='pop')
