@@ -1,5 +1,8 @@
 # pylint: disable=C0103
 """Disjoint-set operator."""
+
+from collections import defaultdict
+
 class DisjointSet():
     """Disjoint-set data structure."""
 
@@ -50,6 +53,13 @@ class DisjointSet():
         return self[x]
 
     def __repr__(self):
-        out = {v: [k for k in self.parents.keys() if self[k] == v]
-               for v in set(self.parents.values())}
-        return str(out) + " " + str(len(self))
+        return str(self.get_sets()) + " " + str(len(self))
+
+    def get_sets(self):
+        """Return the disjoint sets."""
+        keys = self.parents.keys()
+        out = defaultdict(list)
+        for key in keys:
+            parent = self.find(key)
+            out[parent].append(key)
+        return out.values()

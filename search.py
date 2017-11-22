@@ -25,8 +25,10 @@ class State():
         self.scores = scores
 
     @staticmethod
-    def from_candidate(candidate, block_graph):
-        """Given a block graph, only keep connections between blocks in the same component."""
+    def refine_candidate(candidate, block_graph):
+        """Given a block graph, only keep connections between blocks in the same component.
+
+        Returns a state."""
         county_graph = candidate.reconstruct_graph()
         county_districts = nx.connected_components(county_graph)
 
@@ -103,7 +105,8 @@ class State():
 
             if nx.number_connected_components(self.graph) == DISTRICTS:
                 # evaluate
-                cand_scores = [objective(self.graph) for objective in State.objectives]
+                cand_scores = [objective(nx.connected_components(self.graph))
+                               for objective in State.objectives]
 
                 if self.dominated_by(cand_scores):
                     # print("Dominator found!", "old:", scores, "new:", cand_scores)
@@ -162,13 +165,13 @@ def draw_and_highlight(block_graph, *nodes):
     plt.show()
 
 @profile
-def optimize(candidate, block_graph, steps=1000, sample_size=1000):
+def refine_and_optimize(candidate, block_graph, steps=1000, sample_size=1000):
     """Take a solution and return a nearby local maximum."""
 
     State.objectives = [objective(block_graph) for objective in OBJECTIVES]
     print("Finished generating objectives.")
 
-    state = State.from_candidate(candidate, block_graph)
+    state = State.refine_candidate(candidate, block_graph)
 
     for _ in tqdm(range(steps), "Optimizing"):
         candidates = state.best_neighbors(sample_size)
@@ -187,10 +190,31 @@ def optimize(candidate, block_graph, steps=1000, sample_size=1000):
 
     return state
 
+@profile
+def optimize(candidate, steps=1000, sample_size=1000):
+    """Take a solution and return a nearby local maximum."""
 
+    graph = candidate.reconstruct_graph()
 
+    State.objectives = [objective(graph) for objective in OBJECTIVES]
+    print("Finished generating objectives.")
 
+    state = State(graph, candidate.hypotheticals, candidate.scores)
 
+    for _ in tqdm(range(steps), "Optimizing"):
+        candidates = state.best_neighbors(sample_size)
 
+        if not candidates:
+            return state
 
+        # candidates now contains every potential step
+        # sort it into frontiers
+        frontiers = list(toposort(to_input(candidates)))
+        if not frontiers:
+            pprint.pprint(candidates)
+
+        # randomly choose something from the best frontier
+        state = candidates[random.choice(tuple(frontiers[0]))]
+
+    return state
 

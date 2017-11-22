@@ -25,7 +25,8 @@ def plot_graph(graph):
             for node, data in graph.nodes(data=True)})
     plt.show()
 
-def plot_shapes(objects, fig=plt.figure(), axes=None, random_color=False, show_centroids=False, title="", data=None):
+def plot_shapes(objects, fig=plt.figure(), axes=None, random_color=False,
+                title="", save=None):
     """Plots shapely shapes."""
     ax = axes if axes else fig.add_subplot(111)
 
@@ -35,15 +36,6 @@ def plot_shapes(objects, fig=plt.figure(), axes=None, random_color=False, show_c
     max_x = float('-inf')
     max_y = float('-inf')
 
-    # if show_centroids:
-    #     areas = [obj.area for obj in objects]
-    #     total_area = sum(areas)
-
-    #     x, y = (0, 0)
-        
-    #     for obj in objects:
-    #         x += obj.centroid.x * (float(obj.area) / total_area)
-    #         y += obj.centroid.y * (float(obj.area) / total_area)
 
     for obj in objects:
         color = None
@@ -60,16 +52,10 @@ def plot_shapes(objects, fig=plt.figure(), axes=None, random_color=False, show_c
 
         ax.add_patch(patch)
 
-        if show_centroids:
-            ax.add_patch(descartes.PolygonPatch(obj.centroid.buffer(0.5)))
-
         min_x = min(min_x, obj.bounds[0])
         min_y = min(min_y, obj.bounds[1])
         max_x = max(max_x, obj.bounds[2])
         max_y = max(max_y, obj.bounds[3])
-
-    # if show_centroids:
-    #     ax.add_patch(descartes.PolygonPatch(Point(x, y).buffer(1.0)))
 
     ax.set_xlim(min_x - (max_x - min_x) * 0.1, max_x + (max_x - min_x) * 0.1)
     ax.set_ylim(min_y - (max_y - min_y) * 0.1, max_y + (max_y - min_y) * 0.1)
@@ -77,7 +63,10 @@ def plot_shapes(objects, fig=plt.figure(), axes=None, random_color=False, show_c
     plt.title(title)
 
     ax.set_aspect(1)
-    plt.show(fig)        
+    if save:
+        name = title if title else "plot"
+        plt.savefig(name + ".png")
+    plt.show(fig)
 
 def _connect_subgraph(G, a_nodes, b_nodes, same=False):
     """Helper function. Connects graph."""

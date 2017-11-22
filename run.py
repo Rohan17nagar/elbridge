@@ -44,7 +44,7 @@ def main(data_dir, block_group_config, block_config, county_config,
 
         print("Finished evolution.")
         for soln in best_solutions:
-            optimized_state = search.optimize(soln, block_graph)
+            optimized_state = search.refine_and_optimize(soln, block_graph)
             print("Finished optimizing", soln)
 
             optimized_state.plot()

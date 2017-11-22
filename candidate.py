@@ -27,8 +27,7 @@ class Candidate():
     mutation_probability = None
     objectives = []
 
-    @profile
-    def __init__(self, edge_set, copy=False, mutation_probability=0.7):
+    def __init__(self, edge_set, copy=False):
         if not Candidate.master_graph or not Candidate.mutation_probability \
            or not Candidate.objectives:
             raise Exception("Class Candidate hasn't been implemented yet!")
@@ -44,16 +43,19 @@ class Candidate():
         # distance to other candidates on front
         self.distance = 0
 
-        self.mutation_probability = mutation_probability
+        self.mutation_probability = Candidate.mutation_probability
 
         self.graph = None
         self.hypotheticals = set()
+        self.components = []
 
         if copy:
             self.scores = []
             self.name = None
         else:
-            self.scores = [objective(self.reconstruct_graph())
+            self.reconstruct_graph()
+            assert self.components
+            self.scores = [objective(self.components)
                            for objective in Candidate.objectives]
             self.name = Candidate.i
             Candidate.i += 1
@@ -62,11 +64,10 @@ class Candidate():
         return str(self.name) + " (" + str(self.scores) + ")"
 
     def __eq__(self, other):
-        return self.chromosome == other.chromosome
-        # this_graph = self.reconstruct_graph()
-        # other_graph = other.reconstruct_graph()
+        self.reconstruct_graph()
+        other.reconstruct_graph()
 
-        # return this_graph.edges() == other_graph.edges()
+        return self.components == other.components
 
     def copy(self):
         """Returns a copy of this chromosome."""
@@ -83,11 +84,16 @@ class Candidate():
         Domination is defined as a partial ordering < on solutions, where
         for some objectives f1, f2, ..., fm, p < q iff for all i <= m fi(p) >= fi(q).
         """
+        as_good = True
+        better = False
         for i in range(len(self.scores)):
-            if self.scores[i] <= other.scores[i]:
-                return False
+            if self.scores[i] < other.scores[i]:
+                as_good = False
+                break
+            if self.scores[i] > other.scores[i]:
+                better = True
 
-        return True
+        return as_good and better
 
     def crossover(self, other):
         """
@@ -99,7 +105,7 @@ class Candidate():
         chromosome_a = self.chromosome[:split_point] + other.chromosome[split_point:]
         chromosome_b = other.chromosome[:split_point] + self.chromosome[split_point:]
 
-        return (Candidate(chromosome_a), Candidate(chromosome_b))
+        return [Candidate(chromosome_a), Candidate(chromosome_b)]
 
     def mutate(self):
         """Mutate a Candidate solution in place."""
@@ -107,6 +113,11 @@ class Candidate():
             element = random.randint(0, len(self.chromosome)-1)
             self.chromosome[element] = random.random()
 
+        # for idx in range(len(self.chromosome)):
+            # if random.random() < self.mutation_probability:
+                # self.chromosome[idx] = random.random()
+
+    # @profile
     def reconstruct_graph(self):
         """Take a chromosome and return the corresponding graph.
 
@@ -125,9 +136,13 @@ class Candidate():
         i = 0
 
         hypotheticals = set(master.edges())
+        edge_list = list(master.edges())
 
         for _, i in order:
-            u, v = list(master.edges())[i]
+            u, v = edge_list[i]
+            # if disjoint_set.find(u) == disjoint_set.find(v):
+                # this is a move that wouldn't have any effect
+                # continue
             hypotheticals.remove((u, v))
             H.add_edge(u, v)
             disjoint_set.union(u, v)
@@ -135,7 +150,10 @@ class Candidate():
             if len(disjoint_set) == objectives.DISTRICTS:
                 break
 
-        components = nx.connected_components(H)
+        components = disjoint_set.get_sets()
+        self.components = [[(n, master.node[n]) for n in component]
+                           for component in components]
+
         for component in components:
             original_subgraph = master.subgraph(component)
             for edge in original_subgraph.edges():
@@ -151,7 +169,7 @@ class Candidate():
         self.graph = H
         return H
 
-    def plot(self):
+    def plot(self, save=False):
         """Plots a chromosome."""
         graph = self.reconstruct_graph()
         title = "Chromosome (" \
@@ -168,24 +186,54 @@ class Candidate():
             shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
 
             print("Component", i)
-            print("\n".join(["\tCounty {name}: population {pop}"
+            """print("\n".join(["\tCounty {name}: population {pop}"
                              .format(name=node, pop=data.get('pop'))
-                             for node, data in component.nodes(data=True)]))
+                             for node, data in component.nodes(data=True)]))"""
             print("Total population:",
-                  sum([data.get('pop') for _, data in component.nodes(data=True)]))
+                  sum([data.get('pop', 0) for _, data in component.nodes(data=True)]))
             print()
 
-        shape.plot_shapes(shapes, title=title)
+        shape.plot_shapes(shapes, title=title, save=save)
 
-    def optimize(self):
-        """Local search."""
-        graph = self.reconstruct_graph()
-        hypotheticals = self.hypotheticals
+def test():
+    import matplotlib.pyplot as plt
+    G = nx.path_graph(10)
+    Candidate.master_graph = G
+    Candidate.objectives = [objectives.SizeEquality(G)]
+    Candidate.mutation_probability = -1
 
-        evolved_graph, evolved_hypotheticals, scores = search.optimize(graph,
-                                                                       hypotheticals,
-                                                                       steps=20)
-        self.graph = evolved_graph
-        self.hypotheticals = evolved_hypotheticals
-        self.scores = scores
+    a = Candidate([3, 1, 2, 5, 6, 0, 7, 8, 4])
+    b = Candidate([0, 1, 2, 3, 4, 5, 6, 7, 8])
+
+    g_a = a.reconstruct_graph()
+    g_b = b.reconstruct_graph()
+    print(a.chromosome, b.chromosome)
+
+    print("a scores", a.scores)
+    print("b scores", b.scores)
+    nx.draw_networkx(g_a)
+    plt.show()
+
+    nx.draw_networkx(g_b)
+    plt.show()
+
+    [c, d] = a.crossover(b)
+    print(c.chromosome, d.chromosome)
+
+    print("c scores", c.scores)
+    print("d scores", d.scores)
+
+    g_c = c.reconstruct_graph()
+    g_d = d.reconstruct_graph()
+
+    nx.draw_networkx(g_c)
+    plt.show()
+
+    nx.draw_networkx(g_d)
+    plt.show()
+
+
+if __name__ == "__main__":
+    test()
+
 

@@ -73,8 +73,8 @@ def crowding_distance_assignment(frontier):
         frontier[-1].distance = float('inf')
 
         for i, _ in enumerate(frontier[1:-1]):
-            frontier[i].distance += (frontier[i+1].scores[idx] \
-                - frontier[i-1].scores[idx]) \
+            frontier[i].distance += abs((frontier[i+1].scores[idx] \
+                - frontier[i-1].scores[idx])) \
                 / (Candidate.objectives[idx].max_value - Candidate.objectives[idx].min_value)
 
 def crowding_operator(p, q):
@@ -85,7 +85,6 @@ def crowding_operator(p, q):
         return 0
     return 1
 
-@profile
 def make_adam_and_eve(graph, population_size):
     """Makes the first generation."""
     num_edges = len(graph.edges())
@@ -93,21 +92,24 @@ def make_adam_and_eve(graph, population_size):
 
     parents = list(map(Candidate, parents))
 
-    offspring = map(_make_children, [random.sample(parents, 2)
-                                     for i in range(len(parents) // 2)])
+    offspring = list(map(_make_children, [random.sample(parents, 2)
+                                          for i in range(len(parents) // 2)]))
+    offspring = [child for pair in offspring for child in pair]
     return parents, offspring
 
 def select_parents(population):
     """Return two parent solutions.
 
-    Uses binary tournament selection, where two individuals are selected and ranked by the 
+    Uses binary tournament selection, where two individuals are selected and ranked by the
     crowding comparison operator."""
     parents = [None, None]
-    for i in range(2):
+    while parents[0] == parents[1]:
+        parents = [random.choice(population), random.choice(population)]
+    # for i in range(2):
         # pick two elements of the population
-        choices = random.sample(population, 3)
-        parents[i] = sorted(choices,
-                            key=functools.cmp_to_key(crowding_operator))[0]
+        # choices = random.sample(population, 3)
+        # parents[i] = sorted(choices,
+                             # key=functools.cmp_to_key(crowding_operator))[0]
 
     return parents
 
@@ -141,32 +143,23 @@ def evolve(graph, max_generations=500, pop_size=300, mutation_probability=0.7):
     print("Starting NSGA-II. Running for {gens} generations with a population of {pop}."
           .format(gens=max_generations, pop=pop_size))
 
-    stime = datetime.now()
     print("Building initial population...")
     parents, offspring = make_adam_and_eve(graph, pop_size)
-    etime = datetime.now()
-    print("Finished building initial population. Time:", etime - stime)
 
     best_scores = []
 
     for gen in tqdm(range(1, max_generations), "Evolving..."):
         try:
-            print("######### START OF GENERATION", gen + 1, "########")
-            gen_stime = datetime.now()
             combined_population = parents + offspring
-            sort_stime = datetime.now()
             frontiers = fast_non_dominated_sort(combined_population)
-            sort_etime = datetime.now()
-            print("Finished sorting in", str(sort_etime - sort_stime))
 
             print("Best element in generation", str(gen) + ":", str(frontiers[0][0]))
             best_scores.append(frontiers[0][0].scores)
-            
+
             next_parents = []
             remaining_slots = len(parents)
             i = 0
-            
-            print("Building next generation...")
+
             while i < len(frontiers):
                 frontier = frontiers[i]
                 if remaining_slots < len(frontier):
@@ -179,11 +172,7 @@ def evolve(graph, max_generations=500, pop_size=300, mutation_probability=0.7):
                 remaining_slots -= len(frontier)
                 i += 1
 
-            print("Used", i, "frontiers.", remaining_slots, "slots remaining.")
-            if i == 0:
-                print("Unable to iterate any further.")
-                break
-
+            print("Used", i, "of", len(frontiers), "frontiers.", remaining_slots, "slots remaining.")
             if remaining_slots != 0:
                 # fill the remaining slots with the best elements of frontier[i]
                 # this sorts x = (r1, d1) and y = (r2, d2) as x < y
@@ -191,21 +180,10 @@ def evolve(graph, max_generations=500, pop_size=300, mutation_probability=0.7):
                 frontiers[i].sort(key=functools.cmp_to_key(crowding_operator))
                 next_parents += frontiers[i][:remaining_slots]
 
-            print("Finished building new parents.")
-
             parents = next_parents
 
-            print("Making children...")
-            child_stime = datetime.now()
             offspring = make_children(parents)
-            # for child in tqdm(offspring, desc="Optimizing"):
-            #     child.optimize()
-            child_etime = datetime.now()
-            print("Finished making children in", str(child_etime - child_stime))
-            gen_etime = datetime.now()
-            print("######## END OF GENERATION", gen + 1,
-                  "(time: " + str(gen_etime - gen_stime) + ") ########")
-            Candidate.mutation_probability *= 0.9
+            Candidate.mutation_probability *= 0.99
         except KeyboardInterrupt:
             # stops at current generation
             break
@@ -216,14 +194,24 @@ def evolve(graph, max_generations=500, pop_size=300, mutation_probability=0.7):
     print()
     print("Finished running NSGA-II. Best candidate:", frontiers[0][0])
 
-    frontiers[0][0].plot()
+    # frontiers[0][0].plot(save=True)
 
     return frontiers[0]
-    
+
 def test():
     """Testing function."""
-    graph = nx.grid_graph([3, 3])
-    evolve(graph)
+    import matplotlib.pyplot as plt
+    graph = nx.Graph()
+    N = 50
+    for i in range(N):
+        graph.add_node(i, pop=i+1)
+    for i in range(N):
+        for j in range(i, N):
+            graph.add_edge(i, j)
+    final = evolve(graph)[0]
+    new_graph = final.reconstruct_graph()
+    nx.draw_networkx(new_graph)
+    plt.show()
 
 if __name__ == "__main__":
     test()
