@@ -1,0 +1,16 @@
+# Condor submission file for run.py
+
+Universe                = vanilla
+Executable              = run.sh
+Log                     = run.log
+# Requirements            = "InMastodon"
++Group                  = "UNDER"
++Project                = "OTHER"
++ProjectDescription     = "Gerrymandering research computation"
+Input                   = /dev/null
+Output                  = run.out
+Error                   = run.err
+should_transfer_files 	= YES
+when_to_transfer_output = ON_EXIT
+transfer_input_files 		= /var/local/rohan/, config.json
+queue

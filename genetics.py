@@ -4,9 +4,8 @@
 import random
 import functools
 from multiprocessing import Pool
-from datetime import datetime
 
-from objectives import OBJECTIVES as objective_funcs
+import objectives
 from candidate import Candidate
 
 import networkx as nx
@@ -85,13 +84,9 @@ def crowding_operator(p, q):
         return 0
     return 1
 
-def make_adam_and_eve(graph, population_size):
+def make_adam_and_eve(population_size):
     """Makes the first generation."""
-    num_edges = len(graph.edges())
-    parents = [[random.random() for i in range(num_edges)] for _ in range(population_size)]
-
-    parents = list(map(Candidate, parents))
-
+    parents = [Candidate.generate() for i in range(population_size)]
     offspring = list(map(_make_children, [random.sample(parents, 2)
                                           for i in range(len(parents) // 2)]))
     offspring = [child for pair in offspring for child in pair]
@@ -103,13 +98,13 @@ def select_parents(population):
     Uses binary tournament selection, where two individuals are selected and ranked by the
     crowding comparison operator."""
     parents = [None, None]
-    while parents[0] == parents[1]:
-        parents = [random.choice(population), random.choice(population)]
-    # for i in range(2):
+    # while parents[0] == parents[1]:
+        # parents = [random.choice(population), random.choice(population)]
+    for i in range(2):
         # pick two elements of the population
-        # choices = random.sample(population, 3)
-        # parents[i] = sorted(choices,
-                             # key=functools.cmp_to_key(crowding_operator))[0]
+        choices = random.sample(population, 3)
+        parents[i] = sorted(choices,
+                            key=functools.cmp_to_key(crowding_operator))[0]
 
     return parents
 
@@ -128,12 +123,16 @@ def make_children(parents):
     return [child for sublist in children for child in sublist]
 
 @profile
-def evolve(graph, max_generations=500, pop_size=300, mutation_probability=0.7):
+def evolve(graph, config):
     # pylint: disable=R0915, W0603, R0914
     """Runs NSGA-II."""
     Candidate.master_graph = graph
 
-    Candidate.objectives = [obj(graph) for obj in objective_funcs]
+    Candidate.objectives = [objectives.PopulationEquality(graph)]
+
+    max_generations = config.get("generations", 500)
+    pop_size = config.get("population_size", 300)
+    mutation_probability = config.get("mutation_probability", 0.7)
 
     Candidate.mutation_probability = mutation_probability
 
@@ -144,7 +143,7 @@ def evolve(graph, max_generations=500, pop_size=300, mutation_probability=0.7):
           .format(gens=max_generations, pop=pop_size))
 
     print("Building initial population...")
-    parents, offspring = make_adam_and_eve(graph, pop_size)
+    parents, offspring = make_adam_and_eve(pop_size)
 
     best_scores = []
 
@@ -155,6 +154,10 @@ def evolve(graph, max_generations=500, pop_size=300, mutation_probability=0.7):
 
             print("Best element in generation", str(gen) + ":", str(frontiers[0][0]))
             best_scores.append(frontiers[0][0].scores)
+
+            if len(best_scores) >= 2:
+                for idx in range(len(best_scores[-1])):
+                    assert best_scores[-1][idx] >= best_scores[-2][idx]
 
             next_parents = []
             remaining_slots = len(parents)
@@ -172,15 +175,23 @@ def evolve(graph, max_generations=500, pop_size=300, mutation_probability=0.7):
                 remaining_slots -= len(frontier)
                 i += 1
 
-            print("Used", i, "of", len(frontiers), "frontiers.", remaining_slots, "slots remaining.")
+            print("Used", i, "of", len(frontiers), "frontiers.",
+                  remaining_slots, "slots remaining.")
             if remaining_slots != 0:
                 # fill the remaining slots with the best elements of frontier[i]
                 # this sorts x = (r1, d1) and y = (r2, d2) as x < y
                 # if r1 < r2 or r1 == r2 and d1 > d2
-                frontiers[i].sort(key=functools.cmp_to_key(crowding_operator))
-                next_parents += frontiers[i][:remaining_slots]
+                next_parents += frontiers[i]
+            next_parents.sort(key=functools.cmp_to_key(crowding_operator))
 
-            parents = next_parents
+            np_scores = [np.scores for np in next_parents]
+
+            for idx in tqdm(range(len(next_parents)), "Optimizing parents"):
+                print("optimizing parent", next_parents[idx].chromosome)
+                next_parents[idx].reconstruct_graph(force_reconstruct=True)
+                next_parents[idx] = next_parents[idx].optimize()
+                print(idx, next_parents[idx].name, np_scores[idx], next_parents[idx].scores)
+            parents = next_parents[:len(parents)]
 
             offspring = make_children(parents)
             Candidate.mutation_probability *= 0.99
@@ -194,23 +205,32 @@ def evolve(graph, max_generations=500, pop_size=300, mutation_probability=0.7):
     print()
     print("Finished running NSGA-II. Best candidate:", frontiers[0][0])
 
-    # frontiers[0][0].plot(save=True)
-
     return frontiers[0]
 
 def test():
     """Testing function."""
     import matplotlib.pyplot as plt
-    graph = nx.Graph()
-    N = 50
-    for i in range(N):
-        graph.add_node(i, pop=i+1)
-    for i in range(N):
-        for j in range(i, N):
-            graph.add_edge(i, j)
-    final = evolve(graph)[0]
+    G = nx.OrderedGraph()
+    for i in range(5):
+        for j in range(3):
+            G.add_node((i, j), pop=3*i + j + 1)
+    for i in range(5):
+        for j in range(3):
+            if j < 2:
+                G.add_edge((i, j), (i, j+1))
+            if i < 4:
+                G.add_edge((i, j), (i+1, j))
+    # m = {}
+    # for i in range(5):
+        # for j in range(3):
+            # m[(i, j)] = 3*i + j + 1
+    # nx.set_node_attributes(G, m, name='pop')
+    final = evolve(G, {
+        "population_size": 10
+    })[0]
     new_graph = final.reconstruct_graph()
-    nx.draw_networkx(new_graph)
+
+    nx.draw_networkx(new_graph, pos={n: n for n in G})
     plt.show()
 
 if __name__ == "__main__":

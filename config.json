@@ -1,11 +1,10 @@
 {
 	"data_directory": "/var/local/rohan",
 	"pickle_directory": "pickles",
-	
 	"parameters": {
 		"mutation_probability": 0.7,
 		"generations": 500,
-		"population_size": 300
+		"population_size": 100 
 	},
 	"block_groups": {
 		"directory": "wa-block-groups",

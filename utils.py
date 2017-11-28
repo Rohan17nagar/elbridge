@@ -1,8 +1,10 @@
 """Various utility classes and methods."""
 import os
-import random
+from collections import defaultdict
+import networkx as nx
 
 class cd:
+    # pylint: disable=invalid-name, too-few-public-methods
     """Context manager for changing the current working directory."""
     def __init__(self, new_path):
         """Point this to new_path."""
@@ -16,19 +18,29 @@ class cd:
     def __exit__(self, etype, value, traceback):
         os.chdir(self.saved_path)
 
+def chromosome_to_components(graph, vertex_set):
+    """Converts a vertex set to components."""
+    component_lists = defaultdict(list)
+    vertex_list = list(graph.nodes(data=True))
 
-def random_subset(iterator, K):
-    """Picks k random elements of set using reservoir sampling."""
-    result = []
-    N = 0
+    for idx, comp_idx in enumerate(vertex_set):
+        vertex = vertex_list[idx]
+        component_lists[comp_idx].append(vertex)
+    return component_lists
 
-    for item in iterator:
-        N += 1
-        if len(result) < K:
-            result.append(item)
-        else:
-            s = int(random.random() * N)
-            if s < K:
-                result[s] = item
+def get_index(graph, vertex):
+    """Take a vertex, find its index in the graph, and return that position in
+    the chromosome."""
+    assert isinstance(graph, nx.OrderedGraph)
+    vertices = list(graph)
+    if isinstance(vertex, tuple) and isinstance(vertex[1], dict):
+        # remove data from vertex if exists
+        vertex, _ = vertex
 
-    return result
+    index = vertices.index(vertex)
+    return index
+
+def get_component(chromosome, graph, vertex):
+    """Take a vertex, find its index in the graph, and return that position in
+    the chromosome."""
+    return chromosome[get_index(graph, vertex)]

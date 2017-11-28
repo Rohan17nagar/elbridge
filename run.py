@@ -10,8 +10,8 @@ from utils import cd
 import genetics
 import search
 
-def main(data_dir, block_group_config, block_config, county_config,
-         precinct_config):
+def main(data_dir, parameter_config, block_group_config, block_config,
+         county_config, precinct_config):
     """Main function."""
 
     with cd(data_dir):
@@ -40,7 +40,7 @@ def main(data_dir, block_group_config, block_config, county_config,
 
         print("Finished reading in all graphs.")
 
-        best_solutions = genetics.evolve(block_group_graph)
+        best_solutions = genetics.evolve(block_group_graph, parameter_config)
 
         print("Finished evolution.")
         for soln in best_solutions:
@@ -76,6 +76,13 @@ if __name__ == "__main__":
         logging.basicConfig(level=log_level, format=
                             "[%(levelname)s %(asctime)s] %(filename)s@%(funcName)s (%(lineno)d): \
                             %(message)s")
+
+    parameter_configuration = config.get("parameters", {
+        "mutation_probability": 0.7,
+        "generations": 500,
+        "population_size": 300
+    })
+    print("parameters", parameter_configuration)
 
     block_group_configuration = config.get("block_groups", {
         "directory": "wa-block-groups",
@@ -117,5 +124,5 @@ if __name__ == "__main__":
     })
 
     data_directory = config.get("data_directory", "/var/local/rohan")
-    main(data_directory, block_group_configuration, block_configuration,
-         county_configuration, precinct_configuration)
+    main(data_directory, parameter_configuration, block_group_configuration,
+         block_configuration, county_configuration, precinct_configuration)
