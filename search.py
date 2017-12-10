@@ -2,6 +2,7 @@
 """Local search."""
 
 import random
+from multiprocessing import Pool
 
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -74,86 +75,96 @@ class State():
 
         return as_good and better
 
+    def _gradient(self, other_scores):
+        """Calculate the gradient between self and other scores."""
+        out = 0
+        for idx in range(len(self.scores)):
+            out += (other_scores[idx] - self.scores[idx])
+
+        return out
+
+    @profile
+    def _make_step(self, edge):
+        out = None
+        i, j = edge
+        adds = set() # everything added to hypotheticals
+        removes = set() # everything removed from hypotheticals
+
+        i_idx = utils.get_index(self.graph, i)
+        j_idx = utils.get_index(self.graph, j)
+        assert self.chromosome[i_idx] != self.chromosome[j_idx]
+
+        old_value = self.chromosome[j_idx]
+        self.chromosome[j_idx] = self.chromosome[i_idx]
+
+        # get the neighbors of j
+        j_edges = list(self.graph.edges(j))
+        for j_edge in j_edges:
+            # remove them from the graph
+            self.graph.remove_edge(*j_edge)
+
+            # add them to the hypothetical set
+            self.hypotheticals.add(j_edge)
+            adds.add(j_edge)
+
+        # add (i, j) to graph
+        self.graph.add_edge(i, j)
+
+        # remove (i, j) from hypotheticals
+        if (i, j) in self.hypotheticals:
+            self.hypotheticals.remove((i, j))
+            removes.add((i, j))
+        else:
+            self.hypotheticals.remove((j, i))
+            removes.add((j, i))
+
+        components = utils.chromosome_to_components(self.graph, self.chromosome)
+        i_component = components[self.chromosome[i_idx]]
+
+        # add (i', j) to graph, where i' is in the cc of i and (i', j) is in hypotheticals
+        for node, _ in i_component:
+            if (node, j) in self.hypotheticals:
+                self.graph.add_edge(node, j)
+                self.hypotheticals.remove((node, j))
+                removes.add((node, j))
+            elif (j, node) in self.hypotheticals:
+                self.graph.add_edge(j, node)
+                self.hypotheticals.remove((j, node))
+                removes.add((j, node))
+
+        components = list(components.values())
+
+        cand_scores = [objective(components, self.graph) for objective
+                       in State.objectives]
+
+        if self.dominated_by(cand_scores):
+            # new_g = self.graph.copy()
+            new_g = nx.Graph(self.graph)
+            new_h = self.hypotheticals.copy()
+            new_c = self.chromosome.copy()
+            out = (State(new_g, new_h, cand_scores, new_c), (i, j),
+                   self._gradient(cand_scores))
+
+        self.hypotheticals = self.hypotheticals.union(removes).difference(adds)
+        self.graph.add_edges_from(adds)
+        self.graph.remove_edges_from(removes)
+        self.chromosome[j_idx] = old_value
+
+        if out:
+            return out
+        else:
+            return (self, None, 0)
+
     @profile
     def best_neighbor(self, sample_size):
         """Find the best neighbors of this state."""
-        samples = random.sample(self.hypotheticals, min(len(self.hypotheticals), sample_size))
+        moves = self.hypotheticals.union([(j, i) for (i, j) in
+                                          self.hypotheticals])
+        samples = random.sample(moves, min(len(moves), sample_size))
 
-        best_state = self
-        best_move = None
-
-        for ix, jx in samples:
-            for i, j in [(ix, jx), (jx, ix)]:
-                print("evaluating move", i, j)
-                adds = set() # everything added to hypotheticals
-                removes = set() # everything removed from hypotheticals
-
-                print("old chromosome", self.chromosome)
-                i_idx = utils.get_index(self.graph, i)
-                j_idx = utils.get_index(self.graph, j)
-                print("index of i and value", i_idx, self.chromosome[i_idx])
-                print("index of j and value", j_idx, self.chromosome[j_idx])
-
-                assert self.chromosome[i_idx] != self.chromosome[j_idx]
-
-                old_value = self.chromosome[j_idx]
-                self.chromosome[j_idx] = self.chromosome[i_idx]
-                print("index of i and value", i_idx, self.chromosome[i_idx])
-                print("index of j and value", j_idx, self.chromosome[j_idx])
-                print("new chromosome", self.chromosome)
-
-                # get the neighbors of j
-                j_edges = list(self.graph.edges(j))
-                for edge in j_edges:
-                    # remove them from the graph
-                    self.graph.remove_edge(*edge)
-
-                    # add them to the hypothetical set
-                    self.hypotheticals.add(edge)
-                    adds.add(edge)
-
-                # add (i, j) to graph
-                self.graph.add_edge(i, j)
-
-                # remove (i, j) from hypotheticals
-                if (i, j) in self.hypotheticals:
-                    self.hypotheticals.remove((i, j))
-                    removes.add((i, j))
-                else:
-                    self.hypotheticals.remove((j, i))
-                    removes.add((j, i))
-
-                components = utils.chromosome_to_components(self.graph, self.chromosome)
-                i_component = components[self.chromosome[i_idx]]
-
-                # add (i', j) to graph, where i' is in the cc of i and (i', j) is in hypotheticals
-                for node, _ in i_component:
-                    if (node, j) in self.hypotheticals:
-                        self.graph.add_edge(node, j)
-                        self.hypotheticals.remove((node, j))
-                        removes.add((node, j))
-                    elif (j, node) in self.hypotheticals:
-                        self.graph.add_edge(j, node)
-                        self.hypotheticals.remove((j, node))
-                        removes.add((j, node))
-
-                components = list(components.values())
-
-                cand_scores = [objective(components, self.graph) for objective
-                               in State.objectives]
-
-                if best_state.dominated_by(cand_scores):
-                    best_g = self.graph.copy()
-                    best_h = self.hypotheticals.copy()
-                    best_c = self.chromosome.copy()
-                    best_state = State(best_g, best_h, cand_scores, best_c)
-                    best_move = (i, j)
-
-                self.hypotheticals = self.hypotheticals.union(removes).difference(adds)
-                self.graph.add_edges_from(adds)
-                self.graph.remove_edges_from(removes)
-                self.chromosome[j_idx] = old_value
-
+        # with Pool() as p:
+        new_states = list(map(self._make_step, samples))
+        best_state, best_move, _, = max(new_states, key=lambda obj: obj[2])
         return best_state, best_move
 
     def plot(self):
@@ -204,68 +215,40 @@ def draw_and_highlight(graph, *nodes, pos={}, labels={}):
 
 SEEN = {}
 @profile
-def optimize(candidate, steps=1000, sample_size=1000):
+def optimize(candidate, steps=1000, sample_size=100):
     # pylint: disable=global-statement
     """Take a solution and return a nearby local maximum."""
 
     graph = candidate.reconstruct_graph()
-    print("ccomps at start", list(nx.connected_components(graph)))
-    print("score at start", candidate.scores)
-
-    State.objectives = [objectives.PopulationEquality(graph)]
+    assert State.objectives
 
     state = State(graph, candidate.hypotheticals, candidate.scores,
                   candidate.chromosome)
 
+    global SEEN
+    if state in SEEN:
+        return SEEN[state]
+
     nc = lambda state, n: utils.get_component(state.chromosome, state.graph, n)
-    # nx.draw_networkx(state.graph,
-                     # pos={n: n for n in graph},
-                     # labels={n: str(n) + " (" + str(nc(state, n)) + ")" for n in
-                             # graph})
-    # plt.show()
-
-
+    intermediates = []
     for _ in range(steps):
-        global SEEN
-        if state in SEEN:
-            state = SEEN[state]
-            continue
-
         new_state, new_move = state.best_neighbor(sample_size)
-        print("making move", new_move, "with score", new_state.scores)
-        print(list(nx.connected_components(new_state.graph)))
-        print(new_state.chromosome)
         if new_move is None:
             assert [state.scores[idx] >= candidate.scores[idx] for idx in
                     range(len(state.scores))]
-            # nx.draw_networkx(state.graph,
-                             # pos={n: n for n in graph},
-                             # labels={n: str(n) + " (" + str(nc(state, n)) + ")" for n in
-                                     # graph})
-            # plt.show()
             return state
         else:
             assert nc(new_state, new_move[0]) == nc(state, new_move[0])
             assert nc(new_state, new_move[1]) != nc(state, new_move[1])
             assert nc(new_state, new_move[0]) == nc(new_state, new_move[1])
-            print("first comp", nc(new_state, new_move[0]))
-            print("second comp", nc(new_state, new_move[1]))
-            # draw_and_highlight(state.graph, *new_move,
-                               # pos={n: n for n in new_state.graph.nodes()},
-                               # labels={n: str(n) + " (" + str(nc(state, n)) + ")" for n
-                                       # in state.graph.nodes()})
-            # draw_and_highlight(new_state.graph, *new_move,
-                               # pos={n: n for n in new_state.graph.nodes()},
-                               # labels={n: str(n) + " (" + str(nc(new_state, n)) + ")" for n
-                                       # in state.graph.nodes()})
             assert state.dominated_by(new_state.scores), str(state.scores) + " " \
                                                          + str(new_state.scores)
-        SEEN[state] = new_state
+
+        intermediates.append(state)
         state = new_state
 
-    # nx.draw_networkx(state.graph,
-                     # pos={n: n for n in graph},
-                     # labels={n: str(n) + " (" + str(nc(state, n)) + ")" for n in
-                             # graph})
-    # plt.show()
+    for st in intermediates:
+        SEEN[st] = state
+    SEEN[state] = state
+
     return state

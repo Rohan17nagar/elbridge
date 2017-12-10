@@ -7,4 +7,5 @@ data/
 *.log
 auth.key
 .nfs*
-*.lprof
+*.lprof*
+*.png

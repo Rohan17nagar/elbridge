@@ -1,4 +1,12 @@
 """Main runner."""
+import builtins
+try:
+    builtins.profile
+except AttributeError:
+    def profile(func):
+        """Passthrough."""
+        return func
+    builtins.profile = profile
 import logging
 import argparse
 import json
@@ -7,8 +15,7 @@ from datetime import datetime
 import shape
 import annotater
 from utils import cd
-import genetics
-import search
+import evaluation
 
 def main(data_dir, parameter_config, block_group_config, block_config,
          county_config, precinct_config):
@@ -33,21 +40,25 @@ def main(data_dir, parameter_config, block_group_config, block_config,
         logging.debug("Block group annotated.")
 
         annotater.add_census_data(block_group_config, block_group_graph)
-        annotater.add_census_data_block(block_config, block_graph)
+        # annotater.add_census_data_block(block_config, block_graph)
 
         county_graph = shape.create_county_graph(county_config)
         annotater.add_census_data(county_config, county_graph)
 
         print("Finished reading in all graphs.")
 
-        best_solutions = genetics.evolve(block_group_graph, parameter_config)
+        # best_solutions = genetics.evolve(block_group_graph, parameter_config)
+        best_solutions = evaluation.eval_graph(block_group_graph, "Block Group Graph", "bg")
 
         print("Finished evolution.")
-        for soln in best_solutions:
-            optimized_state = search.refine_and_optimize(soln, block_graph)
-            print("Finished optimizing", soln)
 
-            optimized_state.plot()
+        final = best_solutions[0]
+        final.plot(save=True)
+        # for soln in best_solutions:
+            # optimized_state = search.refine_and_optimize(soln, block_graph)
+            # print("Finished optimizing", soln)
+
+            # optimized_state.plot()
 
 # pylint: disable=C0103
 if __name__ == "__main__":
@@ -82,7 +93,6 @@ if __name__ == "__main__":
         "generations": 500,
         "population_size": 300
     })
-    print("parameters", parameter_configuration)
 
     block_group_configuration = config.get("block_groups", {
         "directory": "wa-block-groups",

@@ -63,3 +63,7 @@ class DisjointSet():
             parent = self.find(key)
             out[parent].append(key)
         return out.values()
+
+    def copy(self):
+        """Return a copy of this set."""
+        return DisjointSet(self.weights.keys())

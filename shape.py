@@ -25,10 +25,11 @@ def plot_graph(graph):
             for node, data in graph.nodes(data=True)})
     plt.show()
 
-def plot_shapes(objects, fig=plt.figure(), axes=None, random_color=False,
+def plot_shapes(objects, random_color=False,
                 title="", save=None):
     """Plots shapely shapes."""
-    ax = axes if axes else fig.add_subplot(111)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
 
     # calculate plot bounds
     min_x = float('inf')
@@ -65,8 +66,9 @@ def plot_shapes(objects, fig=plt.figure(), axes=None, random_color=False,
     ax.set_aspect(1)
     if save:
         name = title if title else "plot"
-        plt.savefig(name + ".png")
-    plt.show(fig)
+        plt.savefig(name + ".output.png")
+    else:
+        plt.show(fig)
 
 def _connect_subgraph(G, a_nodes, b_nodes, same=False):
     """Helper function. Connects graph."""

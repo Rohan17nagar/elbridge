@@ -55,7 +55,11 @@ def add_election_data(data_config, precinct_config, block_graph):
                    "block area sum: " + str(sum([i for _, i in blocks]))
 
 def add_precincts_bg(block_group_config, precinct_config, block_group_graph):
-    """Match each block group in a graph to the precinct that contains it."""
+    """Match each block group in a graph to the precinct that contains it.
+
+    This takes a block group graph, finds all precincts that intersect it, and
+    stores that data in the graph.
+    """
     indir = block_group_config.get("directory", "wa-block-groups")
     infile = block_group_config.get("filename", "block-groups.shp")
 
@@ -175,8 +179,12 @@ def add_census_data(config, graph):
     if pickle:
         nx.write_gpickle(graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
 
-def add_census_data_block(config, graph):
-    """Add census data to graph."""
+def add_census_data_from_shapefile(config, graph):
+    """Add census data to graph from a shapefile.
+    
+    For Census blocks, population isn't available in a CSV. The only option is
+    to get data from a special shapefile that has as part of its data the
+    population (as POP10)"""
     indir = config.get("directory")
     infile = config.get("filename")
 

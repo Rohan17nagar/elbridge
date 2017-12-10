@@ -2,10 +2,7 @@
 """Encapsulates a candidate solution."""
 
 import random
-from operator import itemgetter
-from collections import defaultdict
 
-from disjointset import DisjointSet
 import objectives
 import shape
 import search
@@ -18,18 +15,20 @@ class Candidate():
     """
     Encapsulates a candidate solution.
 
-    The chromosome is given by an |E|-length real array A, where A[i] is the order in which edge i 
+    The chromosome is given by an |E|-length real array A, where A[i] is the order in which edge i
     is added to the graph.
 
-    The Candidate class *must* be "initialized" first by assigning a global master graph and a 
-    global mutation probability.
+    The Candidate class *must* be "initialized" first by assigning a global
+    master graph and a global mutation probability.
     """
     i = 0
     master_graph = nx.Graph()
     mutation_probability = None
     objectives = []
+    cache = {}
 
-    def __init__(self, vertex_set, copy=False, fr=False):
+    @profile
+    def __init__(self, vertex_set, fr=False):
         if not Candidate.master_graph or not Candidate.mutation_probability \
            or not Candidate.objectives:
             raise Exception("Class Candidate hasn't been implemented yet!")
@@ -48,6 +47,10 @@ class Candidate():
                 ind += 1
             self.chromosome[idx] = mapping.get(cur_comp)
 
+        vertex_str = "".join(map(str, vertex_set))
+        if vertex_str in Candidate.cache:
+            pass
+
         # set of candidates this candidate dominates
         self.dominated_set = set()
         # number of candidates this candidate is dominated by
@@ -65,18 +68,33 @@ class Candidate():
         self.components = list(component_map.values())
         self.name = None
 
-        if not copy:
-            self.reconstruct_graph(force_reconstruct=fr)
-            self.scores = [objective(self.components, self.graph)
-                           for objective in Candidate.objectives]
-            self.name = Candidate.i
-            Candidate.i += 1
+        self.reconstruct_graph(force_reconstruct=fr)
+        self.scores = [objective(self.components, self.graph)
+                       for objective in Candidate.objectives]
+        self.name = Candidate.i
+        Candidate.i += 1
+
+        Candidate.cache[vertex_str] = self
 
     def __repr__(self):
         return str(self.name) + " (" + str(self.scores) + ")"
 
     def __eq__(self, other):
         return self.chromosome == other.chromosome
+
+    def __hash__(self):
+        return tuple(self.chromosome).__hash__()
+
+    def refresh(self):
+        """Clear out NSGA stuff."""
+        # set of candidates this candidate dominates
+        self.dominated_set = set()
+        # number of candidates this candidate is dominated by
+        self.domination_count = 0
+        # this candidate's front
+        self.rank = 0
+        # distance to other candidates on front
+        self.distance = 0
 
     @staticmethod
     def generate():
@@ -85,15 +103,6 @@ class Candidate():
         assignment = [random.randint(1, objectives.DISTRICTS) for i in
                       range(len(graph))]
         return Candidate(assignment)
-
-    def copy(self):
-        """Returns a copy of this chromosome."""
-        copy = Candidate(self.chromosome, copy=True)
-        copy.scores = self.scores.copy()
-        copy.name = self.name
-        copy.graph = self.graph.copy()
-        copy.hypotheticals = self.hypotheticals.copy()
-        return copy
 
     def dominates(self, other):
         """
@@ -113,24 +122,26 @@ class Candidate():
 
         return as_good and better
 
-    def crossover(self, other):
+    def crossover_and_mutate(self, other):
         """
         Return new Candidate objects.
         """
-        # pick a random number in [0,|E|)
+        # pick a random number in [1,|V|)
         split_point = random.randint(1, len(self.chromosome)-1)
 
         chromosome_a = self.chromosome[:split_point] + other.chromosome[split_point:]
         chromosome_b = other.chromosome[:split_point] + self.chromosome[split_point:]
 
-        return [Candidate(chromosome_a), Candidate(chromosome_b)]
+        cands = [chromosome_a, chromosome_b]
+        out = []
+        for child in cands:
+            if random.random() < Candidate.mutation_probability:
+                element = random.randint(0, len(child) - 1)
+                child[element] = random.randint(1, objectives.DISTRICTS)
+            out.append(Candidate(child))
+        return out
 
-    def mutate(self):
-        """Mutate a Candidate solution in place."""
-        if random.random() < Candidate.mutation_probability:
-            element = random.randint(0, len(self.chromosome)-1)
-            self.chromosome[element] = random.randint(1, objectives.DISTRICTS)
-
+    @profile
     def reconstruct_graph(self, force_reconstruct=False):
         """Take a chromosome and return the corresponding graph.
 
@@ -140,26 +151,16 @@ class Candidate():
             return self.graph
 
         master = Candidate.master_graph
-        H = nx.OrderedGraph()
+        H = nx.Graph(master)
         H.add_nodes_from(master.nodes(data=True))
-        self.hypotheticals = set(master.edges())
-
-        for component in self.components:
-            subgraph = master.subgraph(map(itemgetter(0), component))
-            if force_reconstruct:
-                print("adding edges", subgraph.edges(), "from component", component)
-            for i, j, data in subgraph.edges(data=True):
-                H.add_edge(i, j, **data)
+        H.graph['order'] = master.graph['order']
+        self.hypotheticals = set()
 
         for i, j in master.edges():
-            print("examining", i, j)
             if utils.get_component(self.chromosome, master, i) \
-               == utils.get_component(self.chromosome, master, j):
-                print(i, j, "in same comp")
-                self.hypotheticals.remove((i, j))
-
-        print("finished reconstructing", self.chromosome, "hypotheticals",
-              self.hypotheticals)
+               != utils.get_component(self.chromosome, master, j):
+                H.remove_edge(i, j)
+                self.hypotheticals.add((i, j))
 
         self.graph = H
         return H
@@ -167,53 +168,62 @@ class Candidate():
     def plot(self, save=False):
         """Plots a chromosome."""
         graph = self.reconstruct_graph()
+        output = ""
         title = "Chromosome (" \
                 + "; ".join(["{name}: {value}"
                              .format(name=str(Candidate.objectives[idx]), value=self.scores[idx])
                              for idx in range(len(Candidate.objectives))]) + ")"
+        output += title + "\n"
         shapes = []
 
-        print("Goal size:", sum([data.get('pop')
-                                 for _, data in graph.nodes(data=True)])/objectives.DISTRICTS)
+        output += "Goal size: " + str(sum([data.get('pop') for _, data in graph.nodes(data=True)])
+                                      / objectives.DISTRICTS)
+        output += "\n"
 
         for i, component in enumerate(nx.connected_component_subgraphs(graph)):
             color = (random.random(), random.random(), random.random())
             shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
 
-            print("Component", i)
-            """print("\n".join(["\tCounty {name}: population {pop}"
-                             .format(name=node, pop=data.get('pop'))
-                             for node, data in component.nodes(data=True)]))"""
-            print("Total population:",
-                  sum([data.get('pop', 0) for _, data in component.nodes(data=True)]))
-            print()
+            output += "Component " + str(i) + ":\n"
+            output += "Total population: " +  \
+                  str(sum([data.get('pop', 0) for _, data in
+                           component.nodes(data=True)]))
+            output += "\n\n"
+
+        if save:
+            with open(title + '.out.txt', 'w+') as outfile:
+                outfile.write(output)
+        else:
+            print(output)
 
         shape.plot_shapes(shapes, title=title, save=save)
 
     def optimize(self):
         """Convert a candidate into a state, optimize, and convert back."""
-        print("starting hypotheticals", self.hypotheticals)
-        state = search.optimize(self)
+        state = search.optimize(self, steps=20, sample_size=50)
         out = Candidate(state.chromosome, fr=True)
 
         if not out.scores == state.scores:
             print("inconsistency found between search state and candidate")
+            print("O score", self.scores)
             print("S score", state.scores)
             print("C score", out.scores)
 
+            print("O chromosome", self.chromosome)
             print("S chromosome", state.chromosome)
             print("C chromosome", out.chromosome)
 
+            o_graph = self.reconstruct_graph()
             s_graph = state.graph
             c_graph = out.reconstruct_graph()
 
+            print("O components", list(nx.connected_components(o_graph)))
             print("S components", list(nx.connected_components(s_graph)))
             print("C components", list(nx.connected_components(c_graph)))
 
             assert False
         return out
 
-@profile
 def test():
     """Testing function."""
     import matplotlib.pyplot as plt
