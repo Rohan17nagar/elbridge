@@ -1,0 +1,16 @@
+# Condor submission file for run.py
+
+Universe                = vanilla
+Executable              = condor.sh
+Log                     = condor.log
+Requirements            = (TARGET.Machine == "narsil-13.cs.utexas.edu")
++Group                  = "UNDER"
++Project                = "OTHER"
++ProjectDescription     = "Gerrymandering research computation"
+Input                   = /dev/null
+Output                  = out.$(Process)
+Error                   = err.$(Process)
+stream_error            = True
+stream_output           = True
+kill_sig                = 9
+queue

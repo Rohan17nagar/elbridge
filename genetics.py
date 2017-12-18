@@ -167,6 +167,7 @@ def evolve(graph, config, debug_output=False,
     combined_population = raw_combined_population
 
     signal.signal(signal.SIGINT, signal.default_int_handler)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
 
     for gen in tqdm(range(1, max_generations), "Evolving..."):
         try:

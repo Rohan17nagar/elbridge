@@ -5,11 +5,15 @@ import random
 import time
 from collections import defaultdict
 
-import genetics
-import objectives
 
 import networkx as nx
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+import genetics
+import objectives
+from utils import cd
 
 def generate_grid_test(n, m, weight_names, max_weight=50):
     """Generate grid graphs of size n x m with random weights."""
@@ -34,7 +38,7 @@ def grid_1f(n):
     stamp = int(time.time())
     m = n
     graph, maxes = generate_grid_test(n, m, ['a'])
-    filename = 'grid1f_{n}x{m}_raw_{stamp}'.format(n=n, m=m, stamp=stamp)
+    filename = 'grid1f_{n}x{m}_{stamp}'.format(n=n, m=m, stamp=stamp)
     title = 'Best B-Values in $G_{' + str(n) + ', ' + str(m) + '}$'
 
     _, data = genetics.evolve(graph, config={
@@ -80,7 +84,7 @@ def grid_1f(n):
     plt.yscale('symlog')
     plt.legend()
 
-    plt.savefig(filename + '.png')
+    plt.savefig('out/' + filename + '.png')
     plt.cla()
 
 
@@ -131,7 +135,7 @@ def grid_2f(n):
     plt.yscale('symlog')
     plt.legend()
 
-    plt.savefig(filename + '.png')
+    plt.savefig('out/' + filename + '.png')
     plt.cla()
 
 def eval_graph(graph, name, sname):
@@ -141,21 +145,23 @@ def eval_graph(graph, name, sname):
     filename = '{sname}_{stamp}'.format(sname=sname, stamp=stamp)
     title = 'Best $B$-Values in {name}'.format(name=name)
 
-    # _, data = genetics.evolve(graph, config={
-        # "generations": 100,
-        # "population_size": 50,
-        # "early_break": True,
-        # "optimize": False,
-        # }, objective_fns=obj_fn, debug_output=True)
+    final_frontier, data = genetics.evolve(graph, config={
+        "generations": 500,
+        "population_size": 50,
+        "early_break": True,
+        "optimize": False,
+        }, objective_fns=obj_fn, debug_output=True)
 
-    # max_gen = data.get('final_gen', 100)
-    # fronts = data.get('pareto_per_gen', [])
-    # gen_scores = []
-    # for front in fronts:
-        # elem = front[0]
-        # gen_scores.append(elem.scores)
+    final_frontier[0].plot(save=True)
 
-    # plt.plot(gen_scores, 'r--', label='w/o optimization')
+    max_gen = data.get('final_gen', 100)
+    fronts = data.get('pareto_per_gen', [])
+    gen_scores = []
+    for front in fronts:
+        elem = front[0]
+        gen_scores.append(elem.scores)
+
+    plt.plot(gen_scores, 'r--', label='w/o optimization')
 
     final_frontier, data = genetics.evolve(graph, config={
         "generations": 100,
@@ -171,6 +177,7 @@ def eval_graph(graph, name, sname):
         gen_scores.append(elem.scores)
     plt.plot(gen_scores, 'r-', label='w/ optimization')
 
+    final_frontier[0].plot(save=True)
     # if len(gen_scores) < max_gen:
         # last_score = gen_scores[-1]
 
@@ -184,15 +191,14 @@ def eval_graph(graph, name, sname):
     plt.yscale('symlog')
     plt.legend()
 
-    plt.savefig(filename + '.png')
+    plt.savefig('out/' + filename + '.png')
     plt.cla()
 
     return final_frontier
 
 def main():
     """Main function."""
-    plt.ioff()
-    for n in range(7, 11):
+    for n in range(5, 11):
         grid_2f(n)
 
 if __name__ == "__main__":

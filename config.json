@@ -43,11 +43,6 @@
 			"filename": "counties.csv"
 		}
 	},
-	"voter_registration": {
-		"directory": "wa-vr-db",
-		"filename": "201708_VRDB_Extract.txt",
-		"authkey_file": "auth.key"
-	},
 	"precincts": {
 		"directory": "wa-precincts",
 		"filename": "precincts.shp",

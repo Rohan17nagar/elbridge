@@ -9,3 +9,6 @@ auth.key
 .nfs*
 *.lprof*
 *.png
+err.*
+out.*
+out/

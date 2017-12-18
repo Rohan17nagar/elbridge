@@ -25,8 +25,7 @@ def plot_graph(graph):
             for node, data in graph.nodes(data=True)})
     plt.show()
 
-def plot_shapes(objects, random_color=False,
-                title="", save=None):
+def plot_shapes(objects, random_color=False, title="", save=False):
     """Plots shapely shapes."""
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -66,9 +65,13 @@ def plot_shapes(objects, random_color=False,
     ax.set_aspect(1)
     if save:
         name = title if title else "plot"
-        plt.savefig(name + ".output.png")
+        plt.savefig('out/' + name + ".png")
+
+        os.chmod('out/' + name + '.png', 0o666)
     else:
         plt.show(fig)
+
+    plt.cla()
 
 def _connect_subgraph(G, a_nodes, b_nodes, same=False):
     """Helper function. Connects graph."""
@@ -119,12 +122,19 @@ def get_precinct_shapes(precinct_config):
     with cd(indir):
         with fiona.open(infile) as precincts:
             for shp in tqdm(precincts, "Reading precincts from shapefile"):
-                st_code = shp['properties'].get('ST_CODE')
 
                 precinct_obj = shape(shp['geometry'])
+                precinct_data = shp['properties']
+
+                if not precinct_obj.is_valid:
+                    plot_shapes([precinct_obj])
+                    assert False
+                assert precinct_obj.area != 0, precinct_obj.area
+
+                st_code = precinct_data.get('ST_CODE')
 
                 assert st_code not in precinct_shapes
-                precinct_shapes[st_code] = precinct_obj
+                precinct_shapes[st_code] = (precinct_obj, precinct_data)
 
     return precinct_shapes
 
@@ -150,6 +160,8 @@ def create_county_graph(county_config):
             return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
         
     G = nx.Graph()
+    # map English name (e.g., King County) to GEOID (e.g., 53033)
+    name_to_geoid = {}
 
     with cd(indir):
         with fiona.open(infile) as counties:
@@ -158,9 +170,13 @@ def create_county_graph(county_config):
                     continue
                 shape_obj = shape(shp['geometry'])
 
+                # the vertex in the graph is named for the geoid
+                # the county name is also stored for data matching
                 vertex_name = shp['properties'].get("GEOID")
+                county_name = shp['properties'].get("NAME")
 
                 G.add_node(vertex_name, shape=shape_obj)
+                name_to_geoid[county_name] = vertex_name
 
     # draw the input shapefile
     if draw_shapefile:
@@ -173,6 +189,8 @@ def create_county_graph(county_config):
                for n in G.nodes(data=True)}
         nx.draw_networkx(G, pos=pos)
         plt.show()
+
+    G.graph['name_map'] = name_to_geoid
 
     if pickle:
         nx.write_gpickle(G, os.path.join(indir, infile + ".graph.pickle"))

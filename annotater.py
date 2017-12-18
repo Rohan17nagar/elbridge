@@ -1,8 +1,15 @@
-"""Block graph annotation helpers."""
+"""Graph annotation helpers.
+
+Some notation:
+- bg = block group
+- co = county
+- bl = block
+- pr = precinct
+- unit = bg | co | bl
+"""
 
 import csv
 import os
-import pprint
 from collections import defaultdict
 
 import networkx as nx
@@ -12,30 +19,36 @@ import fiona
 
 import shape
 
-def _get_precinct_map(graph, bg=False):
-    """Get map of precinct code --> blocks in precinct from block graph."""
-    precinct_map = defaultdict(list)
+def invert_precinct_map(graph):
+    """Take a graph with node --> [(precinct, intersection area)] and return
+    precinct --> [(node, intersection area)]."""
 
+    pr_to_unit = defaultdict(list)
     for node, data in graph.nodes(data=True):
-        precs = data.get('precincts')
-        if precs is None:
-            continue
+        assert 'precincts' in data
+        prs = data.get('precincts')
 
-        for prec in precs:
-            precinct_map[prec if bg else prec[0]].append(node if bg else (node, prec[1]))
+        for st_code, area in prs:
+            pr_to_unit[st_code].append((node, area))
 
-    return precinct_map
+    return pr_to_unit
 
-def add_election_data(data_config, precinct_config, block_graph):
+
+def add_election_data(data_config, graph_config, graph):
     # pylint: disable=R0914
     """Add election data from precinct file to graph."""
-    indir = data_config.get("directory", "wa-election-data")
-    infile = data_config.get("filename", "precinct_results.csv")
+    indir = graph_config.get("directory", "wa-counties")
+    infile = graph_config.get("filename", "counties.shp")
 
-    precinct_shapes = shape.get_precinct_shapes(precinct_config)
-    precinct_map = _get_precinct_map(block_graph)
+    pickle = graph_config.get("pickle_graph", True)
 
-    with open(os.path.join(indir, infile)) as data_file:
+    data_indir = data_config.get("directory", "wa-election-data")
+    data_infile = data_config.get("filename", "precinct_results.csv")
+
+    pr_to_units = invert_precinct_map(graph)
+    unit_map = defaultdict(lambda: defaultdict(int))
+
+    with open(os.path.join(data_indir, data_infile)) as data_file:
         records = csv.reader(data_file)
         next(records)
 
@@ -44,55 +57,110 @@ def add_election_data(data_config, precinct_config, block_graph):
             if precinct == "Total" or prec_code == "-1":
                 continue
 
+            assert race == "President/Vice President"
+
+            # st code of this precinct
             st_code = county + "{:08}".format(int(prec_code))
+            units = pr_to_units[st_code]
 
-            if st_code not in precinct_map and votes != 0:
-                raise Exception("Couldn't find precinct", st_code, "in map")
+            if candidate == "Hillary Clinton / Tim Kaine":
+                key = 'DEM'
+            elif candidate == "Donald J. Trump / Michael R. Pence":
+                key = 'REP'
+            else:
+                # ignore third-party races
+                continue
 
-            blocks = precinct_map[st_code]
-            assert sum([i for _, i in blocks]) == precinct_shapes[st_code].area, \
-                   "precinct area: " + str(precinct_shapes[st_code].area) + ", " + \
-                   "block area sum: " + str(sum([i for _, i in blocks]))
+            for unit, area in units:
+                # give unit area * votes votes for candidate key
+                print(unit, area, unit_map)
+                unit_map[unit][key] += int(area * votes)
 
-def add_precincts_bg(block_group_config, precinct_config, block_group_graph):
+    nx.set_node_attributes(graph, unit_map)
+    if pickle:
+        nx.write_gpickle(graph,
+                         os.path.join(indir, infile + ".annotated_graph.pickle"))
+
+
+def add_precincts_county(co_config, pr_config, co_graph):
+    """Annotate county graph with precincts."""
+    indir = co_config.get("directory", "wa-counties")
+    infile = co_config.get("filename", "counties.shp")
+
+    pickle = co_config.get("pickle_graph", True)
+
+    if any(['precincts' in data for _, data in co_graph.nodes(data=True)]):
+        return
+
+    # map block group to precincts it intersects with
+    county_map = defaultdict(list)
+
+    name_map = co_graph.graph["name_map"]
+
+    pr_shapes = shape.get_precinct_shapes(pr_config)
+    for st_code in pr_shapes:
+        pr_shape, pr_data = pr_shapes[st_code]
+        county_name = pr_data.get('COUNTY')
+
+        geoid = name_map[county_name]
+        
+        co_shape = co_graph.node[geoid].get('shape')
+        pr_shape = pr_shape.buffer(0)
+        co_shape = co_shape.buffer(0)
+        assert pr_shape.intersection(co_shape).area / pr_shape.area >= 0.9, pr_shape.intersection(co_shape).area / pr_shape.area
+
+        county_map[geoid].append((st_code, 1))
+
+    nx.set_node_attributes(co_graph,
+                           {county: value for county, value
+                            in county_map.items()},
+                           name='precincts')
+    if pickle:
+        nx.write_gpickle(co_graph,
+                         os.path.join(indir, infile + ".annotated_graph.pickle"))
+
+def add_precincts_block_group(bg_config, pr_config, co_graph, bg_graph):
     """Match each block group in a graph to the precinct that contains it.
 
     This takes a block group graph, finds all precincts that intersect it, and
     stores that data in the graph.
     """
-    indir = block_group_config.get("directory", "wa-block-groups")
-    infile = block_group_config.get("filename", "block-groups.shp")
+    indir = bg_config.get("directory", "wa-block-groups")
+    infile = bg_config.get("filename", "block-groups.shp")
 
-    pickle = block_group_config.get("pickle_graph", True)
+    pickle = bg_config.get("pickle_graph", True)
 
-    if any(['precincts' in data for _, data in block_group_graph.nodes(data=True)]):
+    if any(['precincts' in data for _, data in bg_graph.nodes(data=True)]):
         return
 
     # map block group to precincts it intersects with
-    block_group_map = defaultdict(list)
+    bg_map = defaultdict(list)
 
-    precinct_shapes = shape.get_precinct_shapes(precinct_config)
+    pr_shapes = shape.get_precinct_shapes(pr_config)
 
+    for bg_node, bg_data in tqdm(bg_graph.nodes(data=True), "Assigning block groups to precincts"):
+        bg_obj = bg_data.get('shape')
+        co_data = co_graph.node[bg_node[:5]]
+        precs_in_co = co_data.get('precincts')
 
-    for st_code, precinct_obj in tqdm(precinct_shapes.items(),
-                                      "Assigning block groups to precincts"):
-        found = False
+        for st_code, _ in precs_in_co:
+            pr_obj, _ = pr_shapes[st_code]
+            pr_obj = pr_obj.buffer(0)
+            if pr_obj.intersects(bg_obj) and not pr_obj.touches(bg_obj):
+                # calculate area of precinct this block group represents
+                intersection = pr_obj.intersection(bg_obj)
+                pct = intersection.area / pr_obj.area
 
-        for block_group_node, block_group_data in block_group_graph.nodes(data=True):
-            block_group_obj = block_group_data.get('shape')
-            if precinct_obj.intersects(block_group_obj) \
-                    and not precinct_obj.touches(block_group_obj):
-                block_group_map[block_group_node].append(st_code)
-                found = True
+                bg_map[bg_node].append((st_code, pct))
 
-        assert found
+        if not bg_map[bg_node]:
+            print("No precincts found for", bg_node)
 
-    nx.set_node_attributes(block_group_graph,
-                           {block_group: value for block_group, value
-                            in block_group_map.items()},
+    nx.set_node_attributes(bg_graph, {bg: value for bg, value in bg_map.items()},
                            name='precincts')
+
     if pickle:
-        nx.write_gpickle(block_group_graph,
+        nx.write_gpickle(bg_graph,
                          os.path.join(indir, infile + ".annotated_graph.pickle"))
 
 def add_precincts_block(block_config, precinct_config, block_graph, block_group_graph):
@@ -148,7 +216,38 @@ def add_precincts_block(block_config, precinct_config, block_graph, block_group_
     if pickle:
         nx.write_gpickle(block_graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
 
-def add_census_data(config, graph):
+def add_census_data_county(config, graph):
+    """Add census data to graph."""
+    indir = config.get("directory")
+    infile = config.get("filename")
+
+    data_config = config.get("data", {})
+    data_indir = data_config.get("directory", "data")
+    data_infile = data_config.get("filename")
+
+    pickle = config.get("pickle_graph", True)
+
+    mapping = {}
+
+    if any(['pop' in data for _, data in graph.nodes(data=True)]):
+        return
+
+    with open(os.path.join(indir, data_indir, data_infile)) as data_file:
+        records = csv.reader(data_file)
+
+        next(records) # skip header
+        next(records) # skip plaintext header
+
+        for record in tqdm(records, "Reading records"):
+            [_, geoid, _, _, _, _, _, _, _, _, _, pop] = record
+            mapping[geoid] = int(pop)
+
+    nx.set_node_attributes(graph, mapping, name='pop')
+
+    if pickle:
+        nx.write_gpickle(graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
+
+def add_census_data_block_group(config, graph):
     """Add census data to graph."""
     indir = config.get("directory")
     infile = config.get("filename")
@@ -209,48 +308,14 @@ def add_census_data_from_shapefile(config, graph):
     if pickle:
         nx.write_gpickle(graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
 
-def test(precinct_config, block_graph, block_group_graph):
-    """Test!"""
-    precinct_shapes = shape.get_precinct_shapes(precinct_config)
+def initialize_county_graph(co_config, pr_config, data_config, co_graph):
+    """Initialize county graph."""
+    add_census_data_county(co_config, co_graph)
+    # add_precincts_county(co_config, pr_config, co_graph)
+    # add_election_data(data_config, co_config, co_graph)
 
-    precinct_map = _get_precinct_map(block_group_graph, bg=True)
-
-    missing_bg = set(precinct_shapes.keys()) - set(precinct_map.keys())
-    print("precincts not in block group graph:", len(missing_bg))
-
-    for prec_code in missing_bg:
-        print(prec_code)
-        precinct_obj = precinct_shapes[prec_code]
-        blocks = [data for _, data in block_group_graph.nodes(data=True)]
-        closest_blocks = sorted(blocks,
-                                key=lambda x, t=precinct_obj:
-                                t.centroid.distance(x.get('shape').centroid))[:50]
-
-        for obj in closest_blocks:
-            print(precinct_obj.intersects(obj.get('shape')) and not \
-                  precinct_obj.touches(obj.get('shape')),
-                  obj.get('precincts'))
-
-    precinct_map = _get_precinct_map(block_graph)
-
-    missing_b = set(precinct_shapes.keys()) - set(precinct_map.keys())
-    print("precincts not in block graph:", len(missing_b))
-
-    for prec_code in missing_b:
-        print(prec_code)
-        precinct_obj = precinct_shapes[prec_code]
-        closest_blocks = sorted(block_graph.nodes(data=True),
-                                key=lambda x, t=precinct_obj:
-                                t.centroid.distance(x[1].get('shape').centroid))[:50]
-
-        for name, obj in closest_blocks:
-            print(name,
-                  precinct_obj.intersects(obj.get('shape')) and not \
-                  precinct_obj.touches(obj.get('shape')),
-                  precinct_obj.buffer(0).intersection(obj.get('shape')).area,
-                  obj.get('precincts'),
-                  prec_code in block_group_graph.node[name[:-3]].get('precincts', []))
-        shape.plot_shapes([(obj.get('shape'), (1, 0, 0)
-                            if precinct_obj.intersects(obj.get('shape')) \
-                                and not precinct_obj.touches(obj.get('shape')) else (0, 0, 1))
-                           for _, obj in closest_blocks] + [(precinct_obj, (0, 0, 0, 0))])
+def initialize_block_group_graph(bg_config, pr_config, data_config, ct_graph, bg_graph):
+    """Initialize block group graph."""
+    add_census_data_block_group(bg_config, bg_graph)
+    # add_precincts_block_group(bg_config, pr_config, ct_graph, bg_graph)
+    # add_election_data(data_config, bg_config, bg_graph)

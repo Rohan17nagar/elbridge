@@ -1,5 +1,14 @@
 """Main runner."""
+
+import logging
+import argparse
+import json
+from datetime import datetime
+
 import builtins
+import matplotlib
+
+# hack to modify @profile for non-kernprof use
 try:
     builtins.profile
 except AttributeError:
@@ -7,10 +16,9 @@ except AttributeError:
         """Passthrough."""
         return func
     builtins.profile = profile
-import logging
-import argparse
-import json
-from datetime import datetime
+
+# prevent X11 errors on matplotlib graph creation
+matplotlib.use('Agg')
 
 import shape
 import annotater
@@ -18,47 +26,26 @@ from utils import cd
 import evaluation
 
 def main(data_dir, parameter_config, block_group_config, block_config,
-         county_config, precinct_config):
+         county_config, precinct_config, data_config):
     """Main function."""
 
     with cd(data_dir):
-        logging.debug("Creating block group graph...")
-        block_group_graph = shape.create_block_group_graph(block_group_config)
-        logging.debug("Block group graph created.")
-
-        logging.debug("Annotating block group graph with precincts...")
-        annotater.add_precincts_bg(block_group_config, precinct_config, block_group_graph)
-        logging.debug("Block group graph annotated.")
-
-        logging.debug("Creating block graph...")
-        block_graph = shape.create_block_graph(block_config, block_group_graph)
-        logging.debug("Block group created.")
-
-        logging.debug("Annotating block graph with precincts...")
-        annotater.add_precincts_block(block_config, precinct_config,
-                                      block_graph, block_group_graph)
-        logging.debug("Block group annotated.")
-
-        annotater.add_census_data(block_group_config, block_group_graph)
-        # annotater.add_census_data_block(block_config, block_graph)
-
         county_graph = shape.create_county_graph(county_config)
-        annotater.add_census_data(county_config, county_graph)
+        annotater.initialize_county_graph(county_config, precinct_config, data_config,
+                                          county_graph)
 
-        print("Finished reading in all graphs.")
+        block_group_graph = shape.create_block_group_graph(block_group_config)
+        annotater.initialize_block_group_graph(block_group_config, precinct_config, data_config,
+                                               county_graph, block_group_graph)
 
-        # best_solutions = genetics.evolve(block_group_graph, parameter_config)
-        best_solutions = evaluation.eval_graph(block_group_graph, "Block Group Graph", "bg")
+        print("Finished reading in all graphs. Leaving data directory.")
 
-        print("Finished evolution.")
+    best_solutions = evaluation.eval_graph(block_group_graph, "County Graph", "cg")
 
-        final = best_solutions[0]
-        final.plot(save=True)
-        # for soln in best_solutions:
-            # optimized_state = search.refine_and_optimize(soln, block_graph)
-            # print("Finished optimizing", soln)
+    print("Finished evolution.")
 
-            # optimized_state.plot()
+    final = best_solutions[0]
+    final.plot(save=True)
 
 # pylint: disable=C0103
 if __name__ == "__main__":
@@ -133,6 +120,12 @@ if __name__ == "__main__":
         "draw_shapefile": False,
     })
 
+    voting_data_configuration = config.get("elections", {
+        "directory": "wa-election-data",
+        "filename": "election-data.csv"
+    })
+
     data_directory = config.get("data_directory", "/var/local/rohan")
     main(data_directory, parameter_configuration, block_group_configuration,
-         block_configuration, county_configuration, precinct_configuration)
+         block_configuration, county_configuration, precinct_configuration,
+         voting_data_configuration)

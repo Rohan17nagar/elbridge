@@ -9,6 +9,7 @@ import search
 import utils
 
 import networkx as nx
+from shapely.ops import cascaded_union
 
 class Candidate():
     # pylint: disable=R0902
@@ -47,10 +48,6 @@ class Candidate():
                 ind += 1
             self.chromosome[idx] = mapping.get(cur_comp)
 
-        vertex_str = "".join(map(str, vertex_set))
-        if vertex_str in Candidate.cache:
-            pass
-
         # set of candidates this candidate dominates
         self.dominated_set = set()
         # number of candidates this candidate is dominated by
@@ -73,8 +70,6 @@ class Candidate():
                        for objective in Candidate.objectives]
         self.name = Candidate.i
         Candidate.i += 1
-
-        Candidate.cache[vertex_str] = self
 
     def __repr__(self):
         return str(self.name) + " (" + str(self.scores) + ")"
@@ -169,7 +164,7 @@ class Candidate():
         """Plots a chromosome."""
         graph = self.reconstruct_graph()
         output = ""
-        title = "Chromosome (" \
+        title = "Candidate (" \
                 + "; ".join(["{name}: {value}"
                              .format(name=str(Candidate.objectives[idx]), value=self.scores[idx])
                              for idx in range(len(Candidate.objectives))]) + ")"
@@ -180,18 +175,23 @@ class Candidate():
                                       / objectives.DISTRICTS)
         output += "\n"
 
-        for i, component in enumerate(nx.connected_component_subgraphs(graph)):
+        for i, component in enumerate(utils.chromosome_to_components(graph,
+                                                                     self.chromosome).values()):
             color = (random.random(), random.random(), random.random())
-            shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
+            # shapes += [(data.get('shape'), color) for _, data in component.nodes(data=True)]
+            comp_shape = cascaded_union([data.get('shape') for _, data in component])
+            shapes.append((comp_shape, color))
 
-            output += "Component " + str(i) + ":\n"
-            output += "Total population: " +  \
-                  str(sum([data.get('pop', 0) for _, data in
-                           component.nodes(data=True)]))
+            output += "Component " + str(i) + ":\n\t"
+            output += "Total population: " + str(sum([d.get('pop') for _, d in
+                                                      component])) + "\n"
+            output += "Elements:\n\t"
+            output += "\n\t".join(["Unit " + str(n) + " (pop " +
+                                   str(data.get('pop')) + ")" for n, data in component])
             output += "\n\n"
 
         if save:
-            with open(title + '.out.txt', 'w+') as outfile:
+            with open('out/' + title + '.txt', 'w+') as outfile:
                 outfile.write(output)
         else:
             print(output)
@@ -272,4 +272,3 @@ def test():
 
 if __name__ == "__main__":
     test()
-

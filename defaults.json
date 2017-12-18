@@ -1,7 +1,5 @@
 {
 	"data_directory": "/var/local/rohan",
-	"pickle_directory": "pickles",
-	
 	"parameters": {
 		"mutation_probability": 0.7,
 		"generations": 500,
@@ -37,17 +35,12 @@
 		"pickle_graph": true,
 		"draw_graph": false,
 		"draw_shapefile": false,
-		"reload_graph": false,
+		"reload_graph": true,
 		"state_code": "53",
 		"data": {
 			"directory": "data",
 			"filename": "counties.csv"
 		}
-	},
-	"voter_registration": {
-		"directory": "wa-vr-db",
-		"filename": "201708_VRDB_Extract.txt",
-		"authkey_file": "auth.key"
 	},
 	"precincts": {
 		"directory": "wa-precincts",
