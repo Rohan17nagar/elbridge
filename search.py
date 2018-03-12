@@ -3,18 +3,19 @@
 
 import random
 from multiprocessing import Pool
+import sys
 
 import networkx as nx
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-import objectives
 import shape
 import utils
 
 class State():
     """Encapsulates a state."""
     objectives = []
+    master_graph = []
 
     def __init__(self, graph, hypotheticals, scores, chromosome):
         if not State.objectives:
@@ -32,35 +33,6 @@ class State():
 
     def __repr__(self):
         return str(self.hypotheticals) + " (" + str(self.scores) + ")"
-
-    @staticmethod
-    def refine_candidate(candidate, block_graph):
-        """Given a block graph, only keep connections between blocks in the same component.
-
-        Returns a state."""
-        county_graph = candidate.reconstruct_graph()
-        county_districts = nx.connected_components(county_graph)
-
-        # county --> index of district
-        county_to_district = {}
-        for i, component in enumerate(county_districts):
-            for node in component:
-                county_to_district[node] = i
-
-        graph = block_graph.copy()
-
-        hypotheticals = set()
-
-        # remove edge (i,j) if c2d[i] != c2d[j]
-        edges = list(graph.edges())
-        for i, j in edges:
-            county = lambda n: n[:5]
-            if county_to_district[county(i)] != county_to_district[county(j)]:
-                graph.remove_edge(i, j)
-                hypotheticals.add((i, j))
-
-        return State(graph, hypotheticals, candidate.scores,
-                     candidate.chromosome)
 
     def dominated_by(self, other_scores):
         """Returns true if some scores dominate our score."""
@@ -84,88 +56,80 @@ class State():
         return out
 
     @profile
-    def _make_step(self, edge):
+    def _make_step(self, edge, undo=True):
+        # pylint: disable=too-many-locals
+        # if undo is False, destructively evaluate
         out = None
         i, j = edge
         adds = set() # everything added to hypotheticals
         removes = set() # everything removed from hypotheticals
 
-        i_idx = utils.get_index(self.graph, i)
-        j_idx = utils.get_index(self.graph, j)
-        assert self.chromosome[i_idx] != self.chromosome[j_idx]
+        comp = lambda v: utils.get_component(self.chromosome, self.graph, v)
 
-        old_value = self.chromosome[j_idx]
-        self.chromosome[j_idx] = self.chromosome[i_idx]
+        i_cmp = comp(i)
+        j_cmp = comp(j)
+        assert i_cmp != j_cmp
 
-        # get the neighbors of j
-        j_edges = list(self.graph.edges(j))
-        for j_edge in j_edges:
-            # remove them from the graph
-            self.graph.remove_edge(*j_edge)
+        old_value = j_cmp
+        self.chromosome[utils.get_index(self.graph, j)] = i_cmp
 
-            # add them to the hypothetical set
-            self.hypotheticals.add(j_edge)
-            adds.add(j_edge)
-
-        # add (i, j) to graph
-        self.graph.add_edge(i, j)
-
-        # remove (i, j) from hypotheticals
-        if (i, j) in self.hypotheticals:
-            self.hypotheticals.remove((i, j))
-            removes.add((i, j))
-        else:
-            self.hypotheticals.remove((j, i))
-            removes.add((j, i))
+        for n in State.master_graph[j]:
+            if comp(n) == i_cmp:
+                if (j, n) in self.hypotheticals:
+                    self.graph.add_edge(j, n)
+                    self.hypotheticals.remove((j, n))
+                    removes.add((j, n))
+                elif (n, j) in self.hypotheticals:
+                    self.graph.add_edge(n, j)
+                    self.hypotheticals.remove((n, j))
+                    removes.add((n, j))
+                else:
+                    assert False
+            elif comp(n) == old_value:
+                self.graph.remove_edge(j, n)
+                self.hypotheticals.add((j, n))
+                adds.add((j, n))
 
         components = utils.chromosome_to_components(self.graph, self.chromosome)
-        i_component = components[self.chromosome[i_idx]]
-
-        # add (i', j) to graph, where i' is in the cc of i and (i', j) is in hypotheticals
-        for node, _ in i_component:
-            if (node, j) in self.hypotheticals:
-                self.graph.add_edge(node, j)
-                self.hypotheticals.remove((node, j))
-                removes.add((node, j))
-            elif (j, node) in self.hypotheticals:
-                self.graph.add_edge(j, node)
-                self.hypotheticals.remove((j, node))
-                removes.add((j, node))
-
         components = list(components.values())
-
         cand_scores = [objective(components, self.graph) for objective
                        in State.objectives]
 
         if self.dominated_by(cand_scores):
-            # new_g = self.graph.copy()
-            new_g = nx.Graph(self.graph)
-            new_h = self.hypotheticals.copy()
-            new_c = self.chromosome.copy()
-            out = (State(new_g, new_h, cand_scores, new_c), (i, j),
-                   self._gradient(cand_scores))
+            out = ((i, j), self._gradient(cand_scores))
 
-        self.hypotheticals = self.hypotheticals.union(removes).difference(adds)
-        self.graph.add_edges_from(adds)
-        self.graph.remove_edges_from(removes)
-        self.chromosome[j_idx] = old_value
+        if undo:
+            self.hypotheticals = self.hypotheticals.union(removes).difference(adds)
+            self.graph.add_edges_from(adds)
+            self.graph.remove_edges_from(removes)
+            self.chromosome[utils.get_index(self.graph, j)] = old_value
+        else:
+            self.scores = cand_scores
 
         if out:
             return out
-        else:
-            return (self, None, 0)
+
+        return (None, 0)
 
     @profile
-    def best_neighbor(self, sample_size):
+    def move_to_best_neighbor(self, sample_size):
         """Find the best neighbors of this state."""
         moves = self.hypotheticals.union([(j, i) for (i, j) in
                                           self.hypotheticals])
         samples = random.sample(moves, min(len(moves), sample_size))
-
+        new_moves = []
         # with Pool() as p:
-        new_states = list(map(self._make_step, samples))
-        best_state, best_move, _, = max(new_states, key=lambda obj: obj[2])
-        return best_state, best_move
+            # # for move in p.imap_unordered(self._make_step, samples):
+            # for move in tqdm(p.imap_unordered(self._make_step, samples),
+                             # total=len(samples), desc="Evaluating steps"):
+                # new_moves.append(move)
+        for move in samples:
+            new_moves.append(self._make_step(move))
+        # new_moves = list(map(self._make_step, samples))
+        best_move, _, = max(new_moves, key=lambda obj: obj[1])
+        if best_move is not None:
+            self._make_step(best_move, undo=False)
+        return best_move
 
     def plot(self):
         """Plot this state."""
@@ -213,42 +177,24 @@ def draw_and_highlight(graph, *nodes, pos={}, labels={}):
                      node_color=colors)
     plt.show()
 
-SEEN = {}
 @profile
-def optimize(candidate, steps=1000, sample_size=100):
+def optimize(candidate, pos, steps=1000, sample_size=100):
     # pylint: disable=global-statement
     """Take a solution and return a nearby local maximum."""
 
     graph = candidate.reconstruct_graph()
     assert State.objectives
+    assert State.master_graph
 
     state = State(graph, candidate.hypotheticals, candidate.scores,
                   candidate.chromosome)
 
-    global SEEN
-    if state in SEEN:
-        return SEEN[state]
-
-    nc = lambda state, n: utils.get_component(state.chromosome, state.graph, n)
-    intermediates = []
     for _ in range(steps):
-        new_state, new_move = state.best_neighbor(sample_size)
+    # for _ in tqdm(range(steps), "Taking steps", position=pos):
+        new_move = state.move_to_best_neighbor(sample_size)
         if new_move is None:
             assert [state.scores[idx] >= candidate.scores[idx] for idx in
                     range(len(state.scores))]
             return state
-        else:
-            assert nc(new_state, new_move[0]) == nc(state, new_move[0])
-            assert nc(new_state, new_move[1]) != nc(state, new_move[1])
-            assert nc(new_state, new_move[0]) == nc(new_state, new_move[1])
-            assert state.dominated_by(new_state.scores), str(state.scores) + " " \
-                                                         + str(new_state.scores)
-
-        intermediates.append(state)
-        state = new_state
-
-    for st in intermediates:
-        SEEN[st] = state
-    SEEN[state] = state
 
     return state

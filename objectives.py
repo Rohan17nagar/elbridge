@@ -4,7 +4,7 @@ chromosomes have higher values."""
 import statistics
 import networkx as nx
 
-DISTRICTS = 20
+DISTRICTS = 10
 
 class PopulationEquality():
     # pylint: disable=R0903

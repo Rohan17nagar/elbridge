@@ -35,7 +35,7 @@
 		"pickle_graph": true,
 		"draw_graph": false,
 		"draw_shapefile": false,
-		"reload_graph": true,
+		"reload_graph": false,
 		"state_code": "53",
 		"data": {
 			"directory": "data",

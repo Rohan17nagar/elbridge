@@ -1,6 +1,8 @@
 """Various utility classes and methods."""
 import os
 from collections import defaultdict
+import multiprocessing
+import multiprocessing.pool
 
 class cd:
     # pylint: disable=invalid-name, too-few-public-methods
@@ -16,6 +18,19 @@ class cd:
 
     def __exit__(self, etype, value, traceback):
         os.chdir(self.saved_path)
+
+class MasterProcess(multiprocessing.Process):
+    """Non-daemonic master process."""
+    # make 'daemon' attribute always return False
+    def _get_daemon(self):
+        return False
+    def _set_daemon(self, value):
+        pass
+    daemon = property(_get_daemon, _set_daemon)
+
+class MasterPool(multiprocessing.pool.Pool):
+    """Pool of non-daemonic processes."""
+    Process = MasterProcess
 
 def chromosome_to_components(graph, vertex_set):
     """Converts a vertex set to components."""

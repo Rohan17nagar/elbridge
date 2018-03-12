@@ -3,12 +3,12 @@
 
 import random
 import functools
-from multiprocessing import Pool
-import signal
+from multiprocessing.pool import ThreadPool as TPool
 
 import objectives
 from candidate import Candidate
 from search import State
+from utils import MasterPool
 
 import networkx as nx
 from tqdm import tqdm
@@ -77,7 +77,7 @@ def crowding_operator(p, q):
         return 0
     return 1
 
-def select_parents(population, random_select=False):
+def select_parents(population):
     """Return two parent solutions.
 
     Uses k-ary tournament selection, where k individuals are selected and ranked by the
@@ -87,20 +87,17 @@ def select_parents(population, random_select=False):
     parents = [None, None]
     for i in range(2):
         # pick two elements of the population
-        if random_select:
-            parents[i] = random.choice(population)
-        else:
-            choices = random.sample(population, 3)
-            parents[i] = sorted(choices,
-                                key=functools.cmp_to_key(crowding_operator))[0]
+        choices = random.sample(population, 3)
+        parents[i] = sorted(choices,
+                            key=functools.cmp_to_key(crowding_operator))[0]
 
     return parents
 
-def make_children(parents, random_select=False):
+def make_children(parents):
     """Take a parent population and return an equally-sized child population."""
     children = []
     for _ in tqdm(range(len(parents) // 2), desc="Making children"):
-        parent_a, parent_b = select_parents(parents, random_select=random_select)
+        parent_a, parent_b = select_parents(parents)
         assert parent_a is not None
         assert parent_b is not None
 
@@ -113,17 +110,16 @@ def make_adam_and_eve(population_size):
     """Makes the first generation."""
     parents = [Candidate.generate() for i in tqdm(range(population_size),
                                                   desc="Creating first parents")]
-    offspring = make_children(parents, random_select=True)
+    return parents
 
-    return parents, offspring
-
-def _optimize(c):
-    return c.optimize()
+def _optimize(arg):
+    pos, c = arg
+    return c.optimize(pos)
 
 @profile
 def evolve(graph, config, debug_output=False,
            objective_fns=[(objectives.PopulationEquality, {'key': 'pop'})]):
-    # pylint: disable=R0915, W0603, R0914
+    # pylint: disable=dangerous-default-value, too-many-locals, too-many-branches, too-many-statements
     """Runs NSGA-II."""
     if 'order' not in graph:
         m = {}
@@ -136,11 +132,12 @@ def evolve(graph, config, debug_output=False,
 
     Candidate.objectives = [cls(graph, **args) for cls, args in objective_fns]
     State.objectives = Candidate.objectives
+    State.master_graph = graph
 
     max_generations = config.get("generations", 500)
     pop_size = config.get("population_size", 300)
     mutation_probability = config.get("mutation_probability", 0.7)
-    multiprocess = config.get("multiprocess", False)
+    multiprocess = config.get("multiprocess", True)
     break_on_final_gen = config.get("early_break", False)
     optimize = config.get("optimize", True)
 
@@ -153,24 +150,27 @@ def evolve(graph, config, debug_output=False,
           .format(gens=max_generations, pop=pop_size))
 
     print("Building initial population...")
-    parents, offspring = make_adam_and_eve(pop_size)
-    raw_combined_population = parents + offspring
+    parents = make_adam_and_eve(pop_size)
 
-    if multiprocess:
-        with Pool() as p:
-            # combined_population = pool.map(_optimize, raw_combined_population)
-            size = pop_size * 2
-            with tqdm(total=size) as pbar:
-                for i, _ in tqdm(enumerate(p.imap_unordered(_optimize,
-                                                            raw_combined_population))):
-                    pbar.update()
-    combined_population = raw_combined_population
-
-    signal.signal(signal.SIGINT, signal.default_int_handler)
-    signal.signal(signal.SIGTERM, signal.default_int_handler)
-
-    for gen in tqdm(range(1, max_generations), "Evolving..."):
+    for gen in tqdm(range(1, max_generations + 1), desc="Evolving..."):
         try:
+            raw_offspring = make_children(parents)
+            if optimize:
+                offspring = []
+                if multiprocess:
+                    with TPool() as p:
+                        for child in tqdm(p.imap_unordered(_optimize,
+                                                           enumerate(raw_offspring)),
+                                          total=len(raw_offspring),
+                                          desc="Optimizing children"):
+                            offspring.append(child)
+                else:
+                    for child in tqdm(raw_offspring, desc="Optimizing children"):
+                        offspring.append(child.optimize())
+            else:
+                offspring = raw_offspring
+
+            combined_population = parents + offspring
             frontiers = fast_non_dominated_sort(combined_population)
             _data_output['pareto_per_gen'].append(frontiers[0])
 
@@ -201,21 +201,6 @@ def evolve(graph, config, debug_output=False,
                 if break_on_final_gen:
                     break
 
-
-            raw_offspring = make_children(parents)
-            if optimize:
-                if multiprocess:
-                    with Pool() as pool:
-                        offspring = pool.map(_optimize, raw_offspring)
-                else:
-                    offspring = []
-                    for child in tqdm(raw_offspring, "Optimizing children"):
-                        offspring.append(child.optimize())
-            else:
-                offspring = raw_offspring
-
-            combined_population = parents + offspring
-
             Candidate.mutation_probability *= 0.99
         except KeyboardInterrupt:
             print("Quitting after", gen, "generations.")
@@ -224,7 +209,6 @@ def evolve(graph, config, debug_output=False,
 
     print("Finished running NSGA-II. Best frontier:",
           set([tuple(cand.scores) for cand in frontiers[0]]))
-    print("Finished running NSGA-II. Best generation:", frontiers[0])
 
     if debug_output:
         return frontiers[0], _data_output

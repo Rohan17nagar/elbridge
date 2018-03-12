@@ -136,6 +136,9 @@ class Candidate():
             out.append(Candidate(child))
         return out
 
+    def get_master_graph(self):
+        return Candidate.master_graph
+
     @profile
     def reconstruct_graph(self, force_reconstruct=False):
         """Take a chromosome and return the corresponding graph.
@@ -198,9 +201,9 @@ class Candidate():
 
         shape.plot_shapes(shapes, title=title, save=save)
 
-    def optimize(self):
+    def optimize(self, pos):
         """Convert a candidate into a state, optimize, and convert back."""
-        state = search.optimize(self, steps=20, sample_size=50)
+        state = search.optimize(self, pos, steps=20, sample_size=50)
         out = Candidate(state.chromosome, fr=True)
 
         if not out.scores == state.scores:
@@ -243,23 +246,6 @@ def test():
     Candidate.master_graph = G
     Candidate.objectives = [objectives.PopulationEquality(G)]
     Candidate.mutation_probability = -1
-    # nx.draw_networkx(G, pos={n : n for n in G.nodes()})
-    # plt.show()
-
-    # a = Candidate([1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5])
-    # b = Candidate([1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5])
-
-    # print(a.chromosome, b.chromosome)
-
-    # print("a scores", a.scores)
-    # print("b scores", b.scores)
-
-    # g_a = a.reconstruct_graph()
-    # g_b = b.reconstruct_graph()
-
-    # c = Candidate([5, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1])
-    # assert c.chromosome == [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5]
-
     d = Candidate([1, 1, 2, 3, 4, 4, 5, 4, 4, 5, 2, 4, 2, 2, 4])
     nx.draw_networkx(d.reconstruct_graph(), pos={n: n for n in G.nodes()})
     plt.show()

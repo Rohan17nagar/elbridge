@@ -5,6 +5,16 @@ import random
 import time
 from collections import defaultdict
 
+import builtins
+
+# hack to modify @profile for non-kernprof use
+try:
+    builtins.profile
+except AttributeError:
+    def profile(func):
+        """Passthrough."""
+        return func
+    builtins.profile = profile
 
 import networkx as nx
 import matplotlib
@@ -41,21 +51,21 @@ def grid_1f(n):
     filename = 'grid1f_{n}x{m}_{stamp}'.format(n=n, m=m, stamp=stamp)
     title = 'Best B-Values in $G_{' + str(n) + ', ' + str(m) + '}$'
 
-    _, data = genetics.evolve(graph, config={
-        "generations": 100,
-        "population_size": 50,
-        "early_break": True,
-        "optimize": False,
-        }, objective_fns=obj_fn, debug_output=True)
+    # _, data = genetics.evolve(graph, config={
+        # "generations": 100,
+        # "population_size": 50,
+        # "early_break": True,
+        # "optimize": False,
+        # }, objective_fns=obj_fn, debug_output=True)
 
-    max_gen = data.get('final_gen', 100)
-    fronts = data.get('pareto_per_gen', [])
-    gen_scores = []
-    for front in fronts:
-        elem = front[0]
-        gen_scores.append(elem.scores)
+    # max_gen = data.get('final_gen', 100)
+    # fronts = data.get('pareto_per_gen', [])
+    # gen_scores = []
+    # for front in fronts:
+        # elem = front[0]
+        # gen_scores.append(elem.scores)
 
-    plt.plot(gen_scores, 'r--', label='w/o optimization')
+    # plt.plot(gen_scores, 'r--', label='w/o optimization')
 
     _, data = genetics.evolve(graph, config={
         "generations": 100,
@@ -71,12 +81,12 @@ def grid_1f(n):
         gen_scores.append(elem.scores)
     plt.plot(gen_scores, 'r-', label='w/ optimization')
 
-    if len(gen_scores) < max_gen:
-        last_score = gen_scores[-1]
+    # if len(gen_scores) < max_gen:
+        # last_score = gen_scores[-1]
 
-        plt.plot(range(len(gen_scores) - 1, max_gen),
-                 [last_score] * (max_gen - len(gen_scores) + 1),
-                 'r:', label='after completion')
+        # plt.plot(range(len(gen_scores) - 1, max_gen),
+                 # [last_score] * (max_gen - len(gen_scores) + 1),
+                 # 'r:', label='after completion')
 
     plt.title(title)
     plt.xlabel('Generation')
@@ -145,23 +155,23 @@ def eval_graph(graph, name, sname):
     filename = '{sname}_{stamp}'.format(sname=sname, stamp=stamp)
     title = 'Best $B$-Values in {name}'.format(name=name)
 
-    final_frontier, data = genetics.evolve(graph, config={
-        "generations": 500,
-        "population_size": 50,
-        "early_break": True,
-        "optimize": False,
-        }, objective_fns=obj_fn, debug_output=True)
+    # final_frontier, data = genetics.evolve(graph, config={
+        # "generations": 500,
+        # "population_size": 50,
+        # "early_break": True,
+        # "optimize": False,
+        # }, objective_fns=obj_fn, debug_output=True)
 
-    final_frontier[0].plot(save=True)
+    # final_frontier[0].plot(save=True)
 
-    max_gen = data.get('final_gen', 100)
-    fronts = data.get('pareto_per_gen', [])
-    gen_scores = []
-    for front in fronts:
-        elem = front[0]
-        gen_scores.append(elem.scores)
+    # max_gen = data.get('final_gen', 100)
+    # fronts = data.get('pareto_per_gen', [])
+    # gen_scores = []
+    # for front in fronts:
+        # elem = front[0]
+        # gen_scores.append(elem.scores)
 
-    plt.plot(gen_scores, 'r--', label='w/o optimization')
+    # plt.plot(gen_scores, 'r--', label='w/o optimization')
 
     final_frontier, data = genetics.evolve(graph, config={
         "generations": 100,
@@ -198,8 +208,9 @@ def eval_graph(graph, name, sname):
 
 def main():
     """Main function."""
-    for n in range(5, 11):
-        grid_2f(n)
+    # for n in range(5, 11):
+        # grid_1f(n)
+    grid_1f(70)
 
 if __name__ == "__main__":
     main()
