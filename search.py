@@ -189,8 +189,8 @@ def optimize(candidate, pos, steps=1000, sample_size=100):
     state = State(graph, candidate.hypotheticals, candidate.scores,
                   candidate.chromosome)
 
-    for _ in range(steps):
-    # for _ in tqdm(range(steps), "Taking steps", position=pos):
+    # for _ in range(steps):
+    for _ in tqdm(range(steps), "Taking steps", position=pos):
         new_move = state.move_to_best_neighbor(sample_size)
         if new_move is None:
             assert [state.scores[idx] >= candidate.scores[idx] for idx in

@@ -51,6 +51,7 @@ def grid_1f(n):
     filename = 'grid1f_{n}x{m}_{stamp}'.format(n=n, m=m, stamp=stamp)
     title = 'Best B-Values in $G_{' + str(n) + ', ' + str(m) + '}$'
 
+    # test unoptimized data
     # _, data = genetics.evolve(graph, config={
         # "generations": 100,
         # "population_size": 50,
