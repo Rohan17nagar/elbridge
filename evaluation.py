@@ -73,6 +73,7 @@ def grid_1f(n):
         "population_size": 50,
         "early_break": True,
         "optimize": True,
+        "multiprocess": False,
         }, objective_fns=obj_fn, debug_output=True)
 
     fronts = data.get('pareto_per_gen', [])
@@ -211,7 +212,7 @@ def main():
     """Main function."""
     # for n in range(5, 11):
         # grid_1f(n)
-    grid_1f(70)
+    grid_1f(5)
 
 if __name__ == "__main__":
     main()

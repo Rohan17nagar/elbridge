@@ -165,8 +165,8 @@ def evolve(graph, config, debug_output=False,
                                           desc="Optimizing children"):
                             offspring.append(child)
                 else:
-                    for child in tqdm(raw_offspring, desc="Optimizing children"):
-                        offspring.append(child.optimize())
+                    for idx_child in tqdm(enumerate(raw_offspring), desc="Optimizing children"):
+                        offspring.append(_optimize(idx_child))
             else:
                 offspring = raw_offspring
 

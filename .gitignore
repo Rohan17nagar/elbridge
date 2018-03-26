@@ -12,3 +12,4 @@ auth.key
 err.*
 out.*
 out/
+.venv

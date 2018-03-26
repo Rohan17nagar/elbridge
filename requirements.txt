@@ -48,7 +48,6 @@ pexpect==4.4.0
 pickleshare==0.7.4
 Pillow==5.0.0
 pip-review==1.0
-pkg-resources==0.0.0
 pox==0.2.3
 ppft==1.6.4.7.1
 prompt-toolkit==1.0.15
