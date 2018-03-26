@@ -3,13 +3,14 @@
 
 import random
 
-import objectives
-import shape
-import search
-import utils
-
 import networkx as nx
 from shapely.ops import cascaded_union
+
+import objectives
+import search
+import shape
+import utils
+
 
 class Candidate():
     # pylint: disable=R0902
@@ -201,6 +202,7 @@ class Candidate():
 
         shape.plot_shapes(shapes, title=title, save=save)
 
+    @profile
     def optimize(self, pos):
         """Convert a candidate into a state, optimize, and convert back."""
         state = search.optimize(self, pos, steps=20, sample_size=50)

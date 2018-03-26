@@ -13,3 +13,4 @@ err.*
 out.*
 out/
 .venv
+.idea

@@ -1,17 +1,17 @@
 # pylint: disable=C0103
 """Genetic algorithm stuff."""
 
-import random
 import functools
+import random
 from multiprocessing.pool import ThreadPool as TPool
+
+import networkx as nx
+from tqdm import tqdm
 
 import objectives
 from candidate import Candidate
 from search import State
-from utils import MasterPool
 
-import networkx as nx
-from tqdm import tqdm
 
 # use this to mute tqdm
 # tqdm = lambda x, *y: x
@@ -134,11 +134,18 @@ def evolve(graph, config, debug_output=False,
     State.objectives = Candidate.objectives
     State.master_graph = graph
 
+    # how many generations to run for
     max_generations = config.get("generations", 500)
+    # how many candidates to evaluate
     pop_size = config.get("population_size", 300)
+    # with what starting probability to mutate candidates (decreases by 1% each generation)
     mutation_probability = config.get("mutation_probability", 0.7)
+    # whether to run in parallel
     multiprocess = config.get("multiprocess", True)
+    # whether to break when there's only one candidate left
     break_on_final_gen = config.get("early_break", False)
+    # how frequently (# of generations) candidates should be optimized
+    optimization_interval = config.get("optimization_interval", 20)
     optimize = config.get("optimize", True)
 
     _data_output = {'pareto_per_gen': [],
@@ -155,7 +162,7 @@ def evolve(graph, config, debug_output=False,
     for gen in tqdm(range(1, max_generations + 1), desc="Evolving..."):
         try:
             raw_offspring = make_children(parents)
-            if optimize:
+            if optimize and ((gen+1) % optimization_interval == 0):
                 offspring = []
                 if multiprocess:
                     with TPool() as p:

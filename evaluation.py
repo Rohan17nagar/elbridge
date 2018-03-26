@@ -1,11 +1,10 @@
 # pylint: disable=invalid-name
 """Suite of runtime evaluations. Used for research purposes."""
 
+import builtins
 import random
 import time
 from collections import defaultdict
-
-import builtins
 
 # hack to modify @profile for non-kernprof use
 try:
@@ -23,7 +22,7 @@ import matplotlib.pyplot as plt
 
 import genetics
 import objectives
-from utils import cd
+
 
 def generate_grid_test(n, m, weight_names, max_weight=50):
     """Generate grid graphs of size n x m with random weights."""
@@ -71,7 +70,7 @@ def grid_1f(n):
     _, data = genetics.evolve(graph, config={
         "generations": 100,
         "population_size": 50,
-        "early_break": True,
+        "early_break": False,
         "optimize": True,
         "multiprocess": False,
         }, objective_fns=obj_fn, debug_output=True)
