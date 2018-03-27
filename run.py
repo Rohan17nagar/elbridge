@@ -40,7 +40,7 @@ def main(data_dir, parameter_config, block_group_config, block_config,
 
         print("Finished reading in all graphs. Leaving data directory.")
 
-    best_solutions = evaluation.eval_graph(block_group_graph, "County Graph", "cg")
+    best_solutions = evaluation.eval_graph(block_group_graph, "Block Group Graph", "bgg")
 
     print("Finished evolution.")
 

@@ -175,7 +175,7 @@ def eval_graph(graph, name, sname):
     # plt.plot(gen_scores, 'r--', label='w/o optimization')
 
     final_frontier, data = genetics.evolve(graph, config={
-        "generations": 100,
+        "generations": 500,
         "population_size": 50,
         "early_break": True,
         "optimize": True,
