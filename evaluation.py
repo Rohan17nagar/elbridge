@@ -149,7 +149,7 @@ def grid_2f(n):
     plt.savefig('out/' + filename + '.png')
     plt.cla()
 
-def eval_graph(graph, name, sname):
+def eval_graph(graph, name, sname, config=None):
     """Evaluate performance on n x n grid graphs with two weight functions."""
     obj_fn = [(objectives.PopulationEquality, {'key': 'pop'})]
     stamp = int(time.time())
@@ -174,12 +174,15 @@ def eval_graph(graph, name, sname):
 
     # plt.plot(gen_scores, 'r--', label='w/o optimization')
 
-    final_frontier, data = genetics.evolve(graph, config={
-        "generations": 500,
-        "population_size": 50,
-        "early_break": True,
-        "optimize": True,
-        }, objective_fns=obj_fn, debug_output=True)
+    if not config:
+        config = {
+            'generations': 500,
+            'population_size': 50,
+            'early_break': True,
+            'optimize': True
+        }
+
+    final_frontier, data = genetics.evolve(graph, config=config, objective_fns=obj_fn, debug_output=True)
 
     fronts = data.get('pareto_per_gen', [])
     gen_scores = []
