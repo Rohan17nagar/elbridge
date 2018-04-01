@@ -15,3 +15,5 @@ graphs.
 ## How to run this
 
 Run `python run.py --config=defaults.json`. You'll need to download the appropriate datasets (see `data.md` for more information).
+
+To run on condor, run `condor_submit condor.sub`.
