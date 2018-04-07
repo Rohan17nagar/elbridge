@@ -246,10 +246,6 @@ def add_census_data_county(config, graph):
         for record in tqdm(records, "Reading records"):
             [_, geoid, _, _, _, _, _, _, _, _, _, _pop] = record
             pop = int(_pop)
-            if geoid not in graph:
-                print("couldn't find", geoid)
-            if pop == 0:
-                print("geoid", geoid, "is empty")
             if remove_empty_nodes and pop == 0:
                 empty_nodes.append(pop)
             else:
@@ -285,7 +281,6 @@ def add_census_data_block_group(config, graph):
         return
 
     empty_nodes = []
-    print('remove_empty_nodes is', remove_empty_nodes)
 
     with open(os.path.join(indir, data_indir, data_infile)) as data_file:
         records = csv.reader(data_file)
@@ -294,13 +289,13 @@ def add_census_data_block_group(config, graph):
         next(records) # skip plaintext header
 
         for record in tqdm(records, "Reading records"):
-            [_, geoid, _, pop, _] = record
+            [_, geoid, _, _pop, _] = record
+            pop = int(_pop)
             if remove_empty_nodes and pop == 0:
                 empty_nodes.append(geoid)
             else: # no need to create mapping for empty nodes if we're going to remove them anyway
-                mapping[geoid] = int(pop)
+                mapping[geoid] = pop
 
-    print("removing nodes", empty_nodes)
     if remove_empty_nodes:
         graph.remove_nodes_from(empty_nodes)
 
