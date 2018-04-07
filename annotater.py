@@ -245,6 +245,8 @@ def add_census_data_county(config, graph):
         for record in tqdm(records, "Reading records"):
             [_, geoid, _, _, _, _, _, _, _, _, _, _pop] = record
             pop = int(_pop)
+            if geoid not in graph:
+                print("couldn't find", geoid)
             if remove_empty_nodes and pop == 0:
                 empty_nodes.append(pop)
             else:
