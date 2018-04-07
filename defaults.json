@@ -14,7 +14,8 @@
 		"reload_graph": false,
 		"data": {
 			"directory": "data",
-			"filename": "block_groups.csv"
+			"filename": "block_groups.csv",
+			"remove_empty_nodes": true
 		}
 	},
 	"blocks": {
@@ -26,7 +27,8 @@
 		"reload_graph": false,
 		"data": {
 			"directory": "data",
-			"filename": "block-pop.shp"
+			"filename": "block-pop.shp",
+			"remove_empty_nodes": true
 		}
 	},
 	"counties": {
@@ -39,7 +41,8 @@
 		"state_code": "53",
 		"data": {
 			"directory": "data",
-			"filename": "counties.csv"
+			"filename": "counties.csv",
+			"remove_empty_nodes": true
 		}
 	},
 	"precincts": {

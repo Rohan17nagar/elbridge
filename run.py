@@ -26,7 +26,7 @@ from utils import cd
 import evaluation
 
 def main(data_dir, parameter_config, block_group_config, block_config,
-         county_config, precinct_config, data_config):
+         county_config, precinct_config, data_config, reload_only):
     """Main function."""
 
     with cd(data_dir):
@@ -40,7 +40,13 @@ def main(data_dir, parameter_config, block_group_config, block_config,
 
         print("Finished reading in all graphs. Leaving data directory.")
 
-    best_solutions = evaluation.eval_graph(block_group_graph, "Block Group Graph", "bgg", config=parameter_config)
+    if reload_only:
+        return
+
+    best_solutions = evaluation.eval_graph(block_group_graph,
+                                           "Block Group Graph",
+                                           "bgg",
+                                           config=parameter_config)
 
     print("Finished evolution.")
 
@@ -54,6 +60,8 @@ if __name__ == "__main__":
                         help="Load preferences from specified config file (default ./config.json). \
                         If no configuration file is found, defaults to preferences set in \
                         ./defaults.json.")
+    parser.add_argument('--reload-graphs-only', dest='reload_only', default=False,
+                        help="Reload graphs only. Don't run evolution.")
 
     args = parser.parse_args()
     with open(args.config_file) as config_file:
@@ -128,4 +136,4 @@ if __name__ == "__main__":
     data_directory = config.get("data_directory", "/var/local/rohan")
     main(data_directory, parameter_configuration, block_group_configuration,
          block_configuration, county_configuration, precinct_configuration,
-         voting_data_configuration)
+         voting_data_configuration, args.reload_only)

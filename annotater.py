@@ -225,12 +225,16 @@ def add_census_data_county(config, graph):
     data_indir = data_config.get("directory", "data")
     data_infile = data_config.get("filename")
 
+    remove_empty_nodes = config.get("remove_empty_nodes", False)
+
     pickle = config.get("pickle_graph", True)
 
     mapping = {}
 
     if any(['pop' in data for _, data in graph.nodes(data=True)]):
         return
+
+    empty_nodes = []
 
     with open(os.path.join(indir, data_indir, data_infile)) as data_file:
         records = csv.reader(data_file)
@@ -239,8 +243,15 @@ def add_census_data_county(config, graph):
         next(records) # skip plaintext header
 
         for record in tqdm(records, "Reading records"):
-            [_, geoid, _, _, _, _, _, _, _, _, _, pop] = record
-            mapping[geoid] = int(pop)
+            [_, geoid, _, _, _, _, _, _, _, _, _, _pop] = record
+            pop = int(_pop)
+            if remove_empty_nodes and pop == 0:
+                empty_nodes.append(pop)
+            else:
+                mapping[geoid] = pop
+
+    if remove_empty_nodes:
+        graph.remove_nodes_from(empty_nodes)
 
     nx.set_node_attributes(graph, mapping, name='pop')
 
@@ -256,12 +267,17 @@ def add_census_data_block_group(config, graph):
     data_indir = data_config.get("directory", "data")
     data_infile = data_config.get("filename")
 
+    remove_empty_nodes = config.get("remove_empty_nodes", False)
+
     pickle = config.get("pickle_graph", True)
 
     mapping = {}
 
     if any(['pop' in data for _, data in graph.nodes(data=True)]):
+        # graph already has population data set
         return
+
+    empty_nodes = []
 
     with open(os.path.join(indir, data_indir, data_infile)) as data_file:
         records = csv.reader(data_file)
@@ -271,7 +287,13 @@ def add_census_data_block_group(config, graph):
 
         for record in tqdm(records, "Reading records"):
             [_, geoid, _, pop, _] = record
-            mapping[geoid] = int(pop)
+            if remove_empty_nodes and pop == 0:
+                empty_nodes.append(geoid)
+            else: # no need to create mapping for empty nodes if we're going to remove them anyway
+                mapping[geoid] = int(pop)
+
+    if remove_empty_nodes:
+        graph.remove_nodes_from(empty_nodes)
 
     nx.set_node_attributes(graph, mapping, name='pop')
 
@@ -291,6 +313,8 @@ def add_census_data_from_shapefile(config, graph):
     data_indir = data_config.get("directory", "data")
     data_infile = data_config.get("filename")
 
+    remove_empty_nodes = config.get("remove_empty_nodes", False)
+
     pickle = config.get("pickle_graph", True)
 
     mapping = {}
@@ -298,10 +322,19 @@ def add_census_data_from_shapefile(config, graph):
     if any(['pop' in data for _, data in graph.nodes(data=True)]):
         return
 
+    empty_nodes = []
+
     with fiona.open(os.path.join(indir, data_indir, data_infile)) as blocks:
         for shp in tqdm(blocks, "Reading blocks"):
             geoid = shp.get('properties', {}).get('BLOCKID10')
-            mapping[geoid] = shp.get('properties', {}).get('POP10', 0)
+            pop = shp.get('properties', {}).get('POP10', 0)
+            if remove_empty_nodes and pop == 0:
+                empty_nodes.append(geoid)
+            else:
+                mapping[geoid] = pop
+
+    if remove_empty_nodes:
+        graph.remove_nodes_from(empty_nodes)
 
     nx.set_node_attributes(graph, mapping, name='pop')
 

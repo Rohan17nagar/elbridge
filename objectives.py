@@ -26,13 +26,26 @@ class PopulationEquality():
     @profile
     def __call__(self, components, graph):
         """Returns the mean absolute deviation of subgraph population."""
-        goal = self.total_pop / DISTRICTS
+        # goal = self.total_pop / DISTRICTS
         # score = -1 * sum([abs(sum([data.get(self.key) for _, data in component]) -
                               # goal) for component in components])
+        score = float('inf')
+        for component in components:
+            component_score = 0
+            for _, data in component:
+                if self.key not in data:
+                    print(components)
+                    print(graph.nodes(data=True))
+                    assert False
+                
+                component_score += data.get(self.key)
+
+            score = min(score, component_score)
+
+
         if not all([all([self.key in data for _, data in component]) for
                     component in components]):
-            print(components)
-            print(graph.nodes(data=True))
+            
             assert False
         score = min([sum([data.get(self.key) for _, data in component]) for
                      component in components])
