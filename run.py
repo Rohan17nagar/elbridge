@@ -60,7 +60,7 @@ if __name__ == "__main__":
                         help="Load preferences from specified config file (default ./config.json). \
                         If no configuration file is found, defaults to preferences set in \
                         ./defaults.json.")
-    parser.add_argument('--reload-graphs-only', dest='reload_only', default=False,
+    parser.add_argument('--reload-only', dest='reload_only', action='store_true', default=False,
                         help="Reload graphs only. Don't run evolution.")
 
     args = parser.parse_args()
