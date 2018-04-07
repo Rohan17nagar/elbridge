@@ -247,10 +247,14 @@ def add_census_data_county(config, graph):
             pop = int(_pop)
             if geoid not in graph:
                 print("couldn't find", geoid)
+            if pop == 0:
+                print("geoid", geoid, "is empty")
             if remove_empty_nodes and pop == 0:
                 empty_nodes.append(pop)
             else:
                 mapping[geoid] = pop
+
+    assert 0 not in mapping.values()
 
     if remove_empty_nodes:
         graph.remove_nodes_from(empty_nodes)
