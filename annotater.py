@@ -278,6 +278,7 @@ def add_census_data_block_group(config, graph):
         return
 
     empty_nodes = []
+    print('remove_empty_nodes is', remove_empty_nodes)
 
     with open(os.path.join(indir, data_indir, data_infile)) as data_file:
         records = csv.reader(data_file)
@@ -292,6 +293,7 @@ def add_census_data_block_group(config, graph):
             else: # no need to create mapping for empty nodes if we're going to remove them anyway
                 mapping[geoid] = int(pop)
 
+    print("removing nodes", empty_nodes)
     if remove_empty_nodes:
         graph.remove_nodes_from(empty_nodes)
 

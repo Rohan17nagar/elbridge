@@ -42,14 +42,6 @@ class PopulationEquality():
 
             score = min(score, component_score)
 
-
-        if not all([all([self.key in data for _, data in component]) for
-                    component in components]):
-            
-            assert False
-        score = min([sum([data.get(self.key) for _, data in component]) for
-                     component in components])
-
         # punish district maps with more or less than d ccomps
         # this punishes disconnected districts
         ncc = nx.number_connected_components(graph)
