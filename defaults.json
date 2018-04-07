@@ -15,7 +15,7 @@
 		"data": {
 			"directory": "data",
 			"filename": "block_groups.csv",
-			"remove_empty_nodes": true
+			"remove_empty_nodes": false
 		}
 	},
 	"blocks": {
@@ -28,7 +28,7 @@
 		"data": {
 			"directory": "data",
 			"filename": "block-pop.shp",
-			"remove_empty_nodes": true
+			"remove_empty_nodes": false
 		}
 	},
 	"counties": {
@@ -42,7 +42,7 @@
 		"data": {
 			"directory": "data",
 			"filename": "counties.csv",
-			"remove_empty_nodes": true
+			"remove_empty_nodes": false
 		}
 	},
 	"precincts": {
