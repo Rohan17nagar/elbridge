@@ -107,7 +107,8 @@ def add_precincts_county(co_config, pr_config, co_graph):
         co_shape = co_graph.node[geoid].get('shape')
         pr_shape = pr_shape.buffer(0)
         co_shape = co_shape.buffer(0)
-        assert pr_shape.intersection(co_shape).area / pr_shape.area >= 0.9, pr_shape.intersection(co_shape).area / pr_shape.area
+        assert pr_shape.intersection(co_shape).area / pr_shape.area >= 0.9, \
+               pr_shape.intersection(co_shape).area / pr_shape.area
 
         county_map[geoid].append((st_code, 1))
 
