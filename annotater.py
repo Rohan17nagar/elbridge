@@ -225,7 +225,7 @@ def add_census_data_county(config, graph):
     data_indir = data_config.get("directory", "data")
     data_infile = data_config.get("filename")
 
-    remove_empty_nodes = config.get("remove_empty_nodes", False)
+    remove_empty_nodes = data_config.get("remove_empty_nodes", False)
 
     pickle = config.get("pickle_graph", True)
 
@@ -267,7 +267,7 @@ def add_census_data_block_group(config, graph):
     data_indir = data_config.get("directory", "data")
     data_infile = data_config.get("filename")
 
-    remove_empty_nodes = config.get("remove_empty_nodes", False)
+    remove_empty_nodes = data_config.get("remove_empty_nodes", False)
 
     pickle = config.get("pickle_graph", True)
 
@@ -315,7 +315,7 @@ def add_census_data_from_shapefile(config, graph):
     data_indir = data_config.get("directory", "data")
     data_infile = data_config.get("filename")
 
-    remove_empty_nodes = config.get("remove_empty_nodes", False)
+    remove_empty_nodes = data_config.get("remove_empty_nodes", False)
 
     pickle = config.get("pickle_graph", True)
 
