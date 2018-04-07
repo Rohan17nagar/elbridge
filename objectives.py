@@ -29,7 +29,7 @@ class PopulationEquality():
         goal = self.total_pop / DISTRICTS
         # score = -1 * sum([abs(sum([data.get(self.key) for _, data in component]) -
                               # goal) for component in components])
-        score = float('inf')
+        score = 0
         for component in components:
             component_score = 0
             for _, data in component:
@@ -43,7 +43,7 @@ class PopulationEquality():
             score += abs(component_score - goal)
 
         score *= -1
-        
+
         # punish district maps with more or less than d ccomps
         # this punishes disconnected districts
         ncc = nx.number_connected_components(graph)
