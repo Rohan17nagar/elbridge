@@ -26,10 +26,10 @@ class PopulationEquality():
     @profile
     def __call__(self, components, graph):
         """Returns the mean absolute deviation of subgraph population."""
-        goal = self.total_pop / DISTRICTS
         # score = -1 * sum([abs(sum([data.get(self.key) for _, data in component]) -
                               # goal) for component in components])
-        score = 0
+        # goal = self.total_pop / DISTRICTS
+        score = float('inf')
         for component in components:
             component_score = 0
             for _, data in component:
@@ -39,10 +39,9 @@ class PopulationEquality():
                     assert False
                 
                 component_score += data.get(self.key)
-
-            score += abs(component_score - goal)
-
-        score *= -1
+            
+            score = min(score, component_score)
+            # score += abs(component_score - goal)
 
         # punish district maps with more or less than d ccomps
         # this punishes disconnected districts
