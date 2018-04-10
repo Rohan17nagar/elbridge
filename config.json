@@ -3,7 +3,7 @@
 	"pickle_directory": "pickles",
 	"parameters": {
 		"mutation_probability": 0.7,
-		"generations": 500,
+		"generations": 2000,
 		"population_size": 50
 	},
 	"block_groups": {
