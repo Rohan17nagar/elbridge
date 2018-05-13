@@ -181,6 +181,8 @@ def evolve(graph, config, debug_output=False,
             frontiers = fast_non_dominated_sort(combined_population)
             _data_output['pareto_per_gen'].append(frontiers[0])
 
+            print("Best score in generation", str(gen) + ":",
+                  frontiers[0][0].scores, frontiers[0][0].score_data)
             print("Best frontier in generation", str(gen) + ":",
                   set([tuple(cand.scores) for cand in frontiers[0]]))
             print("Fronts", len(frontiers))

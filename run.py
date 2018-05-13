@@ -25,6 +25,7 @@ import annotater
 from utils import cd
 import evaluation
 
+
 def main(data_dir, parameter_config, block_group_config, block_config,
          county_config, precinct_config, data_config, reload_only):
     """Main function."""

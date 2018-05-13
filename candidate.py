@@ -67,8 +67,10 @@ class Candidate():
         self.name = None
 
         self.reconstruct_graph(force_reconstruct=fr)
-        self.scores = [objective(self.components, self.graph)
-                       for objective in Candidate.objectives]
+        self.scores_and_data = [objective(self.components, self.graph, with_data=True)
+                                for objective in Candidate.objectives]
+        self.scores = [score[0] for score in self.scores_and_data]
+        self.score_data = [score[1] for score in self.scores_and_data]
         self.name = Candidate.i
         Candidate.i += 1
 

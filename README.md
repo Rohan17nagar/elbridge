@@ -23,4 +23,3 @@ To run on condor, run `condor_submit condor.sub`.
 * Why does the algorithm always plateau at 0?
   * This means that the smallest district has population 0. Maybe ignore any block group of size 0? These can then be retrofitted back into the output, or ignored entirely.
   * It could also mean that the minimum-size heuristic isn't a very good one.
-* 
