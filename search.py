@@ -2,15 +2,14 @@
 """Local search."""
 
 import random
-from multiprocessing import Pool
-import sys
 
-import networkx as nx
 import matplotlib.pyplot as plt
+import networkx as nx
 from tqdm import tqdm
 
 import shape
 import utils
+
 
 class State():
     """Encapsulates a state."""
@@ -179,7 +178,6 @@ def draw_and_highlight(graph, *nodes, pos={}, labels={}):
 
 @profile
 def optimize(candidate, pos, steps=1000, sample_size=100):
-    # pylint: disable=global-statement
     """Take a solution and return a nearby local maximum."""
 
     graph = candidate.reconstruct_graph()

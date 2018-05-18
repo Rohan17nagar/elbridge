@@ -47,11 +47,11 @@ class PopulationEquality():
         # punish district maps with more or less than d ccomps
         # this punishes disconnected districts
         ncc = nx.number_connected_components(graph)
-        score -= abs(score) * 100 * abs(ncc - DISTRICTS)
+        score -= 100 * abs(ncc - DISTRICTS)
         data['components'] = ncc
 
         # punish district maps with more or less than d districts
-        score -= abs(score) * 1000 * abs(len(components) - DISTRICTS)
+        score -= 1000 * abs(len(components) - DISTRICTS)
         data['districts'] = len(components)
 
         if with_data:
