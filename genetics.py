@@ -88,8 +88,9 @@ def select_parents(population):
     for i in range(2):
         # pick two elements of the population
         choices = random.sample(population, 3)
-        parents[i] = sorted(choices,
-                            key=functools.cmp_to_key(crowding_operator))[0]
+        parents[i] = sorted(
+            choices, key=functools.cmp_to_key(crowding_operator)
+        )[0]
 
     return parents
 
@@ -239,7 +240,8 @@ def test():
                 G.add_edge((i, j), (i+1, j))
 
     final = evolve(G, {
-        "population_size": 10
+        "population_size": 10,
+        "multiprocess": False,
     })[0]
     new_graph = final.reconstruct_graph()
 

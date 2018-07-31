@@ -161,8 +161,7 @@ def add_precincts_block_group(bg_config, pr_config, co_graph, bg_graph):
                            name='precincts')
 
     if pickle:
-        nx.write_gpickle(bg_graph,
-                         os.path.join(indir, infile + ".annotated_graph.pickle"))
+        nx.write_gpickle(bg_graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
 
 def add_precincts_block(block_config, precinct_config, block_graph, block_group_graph):
     # pylint: disable=R0914

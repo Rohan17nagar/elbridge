@@ -26,28 +26,28 @@ from utils import cd
 import evaluation
 
 
-def main(data_dir, parameter_config, block_group_config, block_config,
-         county_config, precinct_config, data_config, reload_only):
+def main(data_dir, configs, reload_only):
     """Main function."""
-
     with cd(data_dir):
-        county_graph = shape.create_county_graph(county_config)
-        annotater.initialize_county_graph(county_config, precinct_config, data_config,
-                                          county_graph)
+        county_graph = shape.create_county_graph(configs.get('county'))
+        annotater.initialize_county_graph(
+            configs.get('county'), configs.get('precinct'), configs.get('voting_data'), county_graph
+        )
 
-        block_group_graph = shape.create_block_group_graph(block_group_config)
-        annotater.initialize_block_group_graph(block_group_config, precinct_config, data_config,
-                                               county_graph, block_group_graph)
+        block_group_graph = shape.create_block_group_graph(configs.get('block_group'))
+        annotater.initialize_block_group_graph(
+            configs.get('block_group'), configs.get('precinct'), configs.get('voting_data'),
+            county_graph, block_group_graph
+        )
 
         print("Finished reading in all graphs. Leaving data directory.")
 
     if reload_only:
         return
 
-    best_solutions = evaluation.eval_graph(block_group_graph,
-                                           "Block Group Graph",
-                                           "bgg",
-                                           config=parameter_config)
+    best_solutions = evaluation.eval_graph(
+        block_group_graph, "Block Group Graph", "bgg", config=configs.get('params')
+    )
 
     print("Finished evolution.")
 
@@ -57,12 +57,14 @@ def main(data_dir, parameter_config, block_group_config, block_config,
 # pylint: disable=C0103
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate an optimal gerrymander.")
-    parser.add_argument('--config', dest='config_file', default='config.json',
-                        help="Load preferences from specified config file (default ./config.json). \
-                        If no configuration file is found, defaults to preferences set in \
-                        ./defaults.json.")
-    parser.add_argument('--reload-only', dest='reload_only', action='store_true', default=False,
-                        help="Reload graphs only. Don't run evolution.")
+    parser.add_argument(
+        '--config', dest='config_file', default='config.json',
+        help=("Load preferences from specified config file (default ./config.json). "
+              "If no configuration file is found, defaults to preferences set in "
+              "./defaults.json."))
+    parser.add_argument(
+        '--reload-only', dest='reload_only', action='store_true', default=False,
+        help="Reload graphs only. Don't run evolution.")
 
     args = parser.parse_args()
     with open(args.config_file) as config_file:
@@ -134,7 +136,14 @@ if __name__ == "__main__":
         "filename": "election-data.csv"
     })
 
+    configurations = {
+        'params': parameter_configuration,
+        'block_group': block_group_configuration,
+        'block': block_configuration,
+        'county': county_configuration,
+        'precinct': precinct_configuration,
+        'voting_data': voting_data_configuration,
+    }
+
     data_directory = config.get("data_directory", "/var/local/rohan")
-    main(data_directory, parameter_configuration, block_group_configuration,
-         block_configuration, county_configuration, precinct_configuration,
-         voting_data_configuration, args.reload_only)
+    main(data_directory, configurations, args.reload_only)
