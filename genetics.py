@@ -1,6 +1,9 @@
 # pylint: disable=C0103
 """Genetic algorithm stuff."""
 
+import matplotlib
+matplotlib.use('Agg')
+
 import functools
 import random
 from multiprocessing.pool import ThreadPool as TPool
