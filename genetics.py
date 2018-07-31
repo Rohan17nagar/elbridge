@@ -120,9 +120,24 @@ def _optimize(arg):
     pos, c = arg
     return c.optimize(pos)
 
+def _optimize_children(raw_offspring, multiprocess=True):
+    offspring = []
+    if multiprocess:
+        with TPool() as p:
+            for child in tqdm(p.imap_unordered(_optimize,
+                                               enumerate(raw_offspring)),
+                              total=len(raw_offspring),
+                              desc="Optimizing children"):
+                offspring.append(child)
+    else:
+        for idx_child in tqdm(enumerate(raw_offspring), desc="Optimizing children"):
+            offspring.append(_optimize(idx_child))
+
+def _get_best_frontier(frontiers):
+    return set([tuple(cand.scores) for cand in frontiers[0]])
+
 @profile
-def evolve(graph, config, debug_output=False,
-           objective_fns=[(objectives.PopulationEquality, {'key': 'pop'})]):
+def evolve(graph, config, debug_output=False, objective_fns=None):
     # pylint: disable=dangerous-default-value, too-many-locals, too-many-branches, too-many-statements
     """Runs NSGA-II."""
     if 'order' not in graph:
@@ -131,6 +146,8 @@ def evolve(graph, config, debug_output=False,
             m[vertex] = idx
         graph.graph['order'] = m
 
+    if not objective_fns:
+        objective_fns=[(objectives.PopulationEquality, {'key': 'pop'})]
 
     Candidate.master_graph = graph
 
@@ -152,8 +169,10 @@ def evolve(graph, config, debug_output=False,
     optimization_interval = config.get("optimization_interval", 20)
     optimize = config.get("optimize", True)
 
-    _data_output = {'pareto_per_gen': [],
-                    'final_gen': max_generations}
+    _data_output = {
+        'pareto_per_gen': [],
+        'final_gen': max_generations,
+    }
 
     Candidate.mutation_probability = mutation_probability
 
@@ -167,17 +186,7 @@ def evolve(graph, config, debug_output=False,
         try:
             raw_offspring = make_children(parents)
             if optimize and ((gen+1) % optimization_interval == 0):
-                offspring = []
-                if multiprocess:
-                    with TPool() as p:
-                        for child in tqdm(p.imap_unordered(_optimize,
-                                                           enumerate(raw_offspring)),
-                                          total=len(raw_offspring),
-                                          desc="Optimizing children"):
-                            offspring.append(child)
-                else:
-                    for idx_child in tqdm(enumerate(raw_offspring), desc="Optimizing children"):
-                        offspring.append(_optimize(idx_child))
+                offspring = _optimize_children(raw_offspring, multiprocess=multiprocess)
             else:
                 offspring = raw_offspring
 
@@ -185,10 +194,8 @@ def evolve(graph, config, debug_output=False,
             frontiers = fast_non_dominated_sort(combined_population)
             _data_output['pareto_per_gen'].append(frontiers[0])
 
-            print("Best score in generation", str(gen) + ":",
-                  frontiers[0][0].scores_and_data)
-            print("Best frontier in generation", str(gen) + ":",
-                  set([tuple(cand.scores) for cand in frontiers[0]]))
+            print("Best score in generation {}: {}".format(gen, frontiers[0][0].scores_and_data))
+            print("Best frontier in generation {}: {}".format(gen, _get_best_frontier(frontiers))
             print("Fronts", len(frontiers))
 
             next_parents = []
@@ -216,17 +223,14 @@ def evolve(graph, config, debug_output=False,
 
             Candidate.mutation_probability *= 0.99
         except KeyboardInterrupt:
-            print("Quitting after", gen, "generations.")
+            print("Interrupted; quitting after {} generations.".format(gen))
             _data_output['final_gen'] = gen
             break
 
-    print("Finished running NSGA-II. Best frontier:",
-          set([tuple(cand.scores) for cand in frontiers[0]]))
+    print("Finished running NSGA-II. Best frontier:", _get_best_frontier(frontiers))
 
-    if debug_output:
-        return frontiers[0], _data_output
+    return frontiers[0], _data_output if debug_output else None
 
-    return frontiers[0]
 
 def test():
     """Testing function."""
@@ -242,7 +246,7 @@ def test():
             if i < 4:
                 G.add_edge((i, j), (i+1, j))
 
-    final = evolve(G, {
+    final, _ = evolve(G, {
         "population_size": 10,
         "multiprocess": False,
     })[0]
