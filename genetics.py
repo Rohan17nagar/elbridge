@@ -195,7 +195,7 @@ def evolve(graph, config, debug_output=False, objective_fns=None):
             _data_output['pareto_per_gen'].append(frontiers[0])
 
             print("Best score in generation {}: {}".format(gen, frontiers[0][0].scores_and_data))
-            print("Best frontier in generation {}: {}".format(gen, _get_best_frontier(frontiers))
+            print("Best frontier in generation {}: {}".format(gen, _get_best_frontier(frontiers)))
             print("Fronts", len(frontiers))
 
             next_parents = []
