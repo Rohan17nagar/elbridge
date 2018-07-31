@@ -133,6 +133,8 @@ def _optimize_children(raw_offspring, multiprocess=True):
         for idx_child in tqdm(enumerate(raw_offspring), desc="Optimizing children"):
             offspring.append(_optimize(idx_child))
 
+    return offspring
+
 def _get_best_frontier(frontiers):
     return set([tuple(cand.scores) for cand in frontiers[0]])
 
