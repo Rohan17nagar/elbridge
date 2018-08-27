@@ -17,7 +17,7 @@ from search import State
 
 
 # use this to mute tqdm
-# tqdm = lambda x, *y: x
+tqdm = lambda x, *y, **z: x
 
 def fast_non_dominated_sort(population):
     """Take a population P and sort it into fronts F1, F2, ..., Fn."""
@@ -149,7 +149,9 @@ def evolve(graph, config, debug_output=False, objective_fns=None):
         graph.graph['order'] = m
 
     if not objective_fns:
-        objective_fns=[(objectives.PopulationEquality, {'key': 'pop'})]
+        objective_fns = [
+            (objectives.PopulationEquality, {'key': 'pop'})
+        ]
 
     Candidate.master_graph = graph
 
@@ -251,8 +253,8 @@ def test():
     final, _ = evolve(G, {
         "population_size": 10,
         "multiprocess": False,
-    })[0]
-    new_graph = final.reconstruct_graph()
+    })
+    new_graph = final[0].reconstruct_graph()
 
     nx.draw_networkx(new_graph, pos={n: n for n in G})
     plt.show()
