@@ -1,67 +1,26 @@
 """Main runner."""
 
-import logging
 import argparse
 import json
+import logging
 from datetime import datetime
 
-import builtins
 import matplotlib
 
-# hack to modify @profile for non-kernprof use
-try:
-    builtins.profile
-except AttributeError:
-    def profile(func):
-        """Passthrough."""
-        return func
-    builtins.profile = profile
+from elbridge.runners.runner import evaluate
 
 # prevent X11 errors on matplotlib graph creation
 matplotlib.use('Agg')
 
-import shape
-import annotater
-from utils import cd
-import evaluation
 
-
-def main(data_dir, configs, reload_only):
-    """Main function."""
-    with cd(data_dir):
-        county_graph = shape.create_county_graph(configs.get('county'))
-        annotater.initialize_county_graph(
-            configs.get('county'), configs.get('precinct'), configs.get('voting_data'), county_graph
-        )
-
-        block_group_graph = shape.create_block_group_graph(configs.get('block_group'))
-        annotater.initialize_block_group_graph(
-            configs.get('block_group'), configs.get('precinct'), configs.get('voting_data'),
-            county_graph, block_group_graph
-        )
-
-        print("Finished reading in all graphs. Leaving data directory.")
-
-    if reload_only:
-        return
-
-    best_solutions = evaluation.eval_graph(
-        block_group_graph, "Block Group Graph", "bgg", config=configs.get('params')
-    )
-
-    print("Finished evolution.")
-
-    final = best_solutions[0]
-    final.plot(save=True)
-
-# pylint: disable=C0103
-if __name__ == "__main__":
+def parse_arguments():
     parser = argparse.ArgumentParser(description="Generate an optimal gerrymander.")
     parser.add_argument(
         '--config', dest='config_file', default='config.json',
         help=("Load preferences from specified config file (default ./config.json). "
               "If no configuration file is found, defaults to preferences set in "
-              "./defaults.json."))
+              "./defaults.json.")
+    )
     parser.add_argument(
         '--reload-only', dest='reload_only', action='store_true', default=False,
         help="Reload graphs only. Don't run evolution.")
@@ -70,22 +29,10 @@ if __name__ == "__main__":
     with open(args.config_file) as config_file:
         config = json.load(config_file)
 
-    # for each config block, get if key exists, else return default
+    return config, args.reload_only
 
-    log_config = config.get("logging", {"log_level": "WARN", "store_log_file": False})
-    log_level = getattr(logging, log_config.get("log_level", "WARN"), 30)
-    store_log_file = log_config.get("store_log_file", False)
 
-    if store_log_file:
-        logging.basicConfig(level=log_level, format=
-                            "[%(levelname)s %(asctime)s] %(filename)s@%(funcName)s (%(lineno)d): \
-                            %(message)s",
-                            filename="{}.log".format(datetime.now().isoformat()))
-    else:
-        logging.basicConfig(level=log_level, format=
-                            "[%(levelname)s %(asctime)s] %(filename)s@%(funcName)s (%(lineno)d): \
-                            %(message)s")
-
+def get_config_dicts(config):
     parameter_configuration = config.get("parameters", {
         "mutation_probability": 0.7,
         "generations": 500,
@@ -136,7 +83,7 @@ if __name__ == "__main__":
         "filename": "election-data.csv"
     })
 
-    configurations = {
+    return {
         'params': parameter_configuration,
         'block_group': block_group_configuration,
         'block': block_configuration,
@@ -145,5 +92,27 @@ if __name__ == "__main__":
         'voting_data': voting_data_configuration,
     }
 
-    data_directory = config.get("data_directory", "/var/local/rohan")
-    main(data_directory, configurations, args.reload_only)
+
+def setup_logging(config):
+    log_config = config.get("logging", {"log_level": "WARN", "store_log_file": False})
+    log_level = getattr(logging, log_config.get("log_level", "WARN"), 30)
+    store_log_file = log_config.get("store_log_file", False)
+
+    if store_log_file:
+        logging.basicConfig(
+            level=log_level, format="[%(levelname)s %(asctime)s] %(filename)s@%(funcName)s (%(lineno)d): %(message)s",
+            filename="{}.log".format(datetime.now().isoformat())
+        )
+    else:
+        logging.basicConfig(
+            level=log_level, format="[%(levelname)s %(asctime)s] %(filename)s@%(funcName)s (%(lineno)d): %(message)s"
+        )
+
+
+# pylint: disable=C0103
+if __name__ == "__main__":
+    configs, reload_only = parse_arguments()
+    setup_logging(configs)
+
+    data_directory = configs.get("data_directory", "/var/local/rohan")
+    evaluate(data_directory, get_config_dicts(configs), reload_only)

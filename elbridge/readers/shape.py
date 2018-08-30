@@ -3,13 +3,13 @@
 Tools for reading in shapefiles and creating networkx graphs.
 """
 import os
-import random
 from collections import defaultdict
 
 # imports for shapefiles
+from typing import List
+
 from shapely.geometry import shape
 import fiona
-import descartes
 
 # imports for graphs
 import networkx as nx
@@ -17,63 +17,11 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 
 # utilities
-from utils import cd
-
-def plot_graph(graph):
-    """Plots a block graph."""
-    nx.draw_networkx(graph, pos={node: list(data.get('shape').centroid.coords)[0] \
-            for node, data in graph.nodes(data=True)})
-    plt.show()
-
-def plot_shapes(objects, random_color=False, title="", save=False):
-    """Plots shapely shapes."""
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-
-    # calculate plot bounds
-    min_x = float('inf')
-    min_y = float('inf')
-    max_x = float('-inf')
-    max_y = float('-inf')
+from elbridge.readers.plot import plot_shapes
+from elbridge.utils import cd
 
 
-    for obj in objects:
-        color = None
-        if isinstance(obj, tuple):
-            obj, color = obj
-
-        if not color and random_color:
-            color = (random.random(), random.random(), random.random())
-            patch = descartes.PolygonPatch(obj, color=color, ec=(0, 0, 0))
-        elif color:
-            patch = descartes.PolygonPatch(obj, color=color, ec=(0, 0, 0))
-        else:
-            patch = descartes.PolygonPatch(obj, ec=(0, 0, 0))
-
-        ax.add_patch(patch)
-
-        min_x = min(min_x, obj.bounds[0])
-        min_y = min(min_y, obj.bounds[1])
-        max_x = max(max_x, obj.bounds[2])
-        max_y = max(max_y, obj.bounds[3])
-
-    ax.set_xlim(min_x - (max_x - min_x) * 0.1, max_x + (max_x - min_x) * 0.1)
-    ax.set_ylim(min_y - (max_y - min_y) * 0.1, max_y + (max_y - min_y) * 0.1)
-
-    plt.title(title)
-
-    ax.set_aspect(1)
-    if save:
-        name = title if title else "plot"
-        plt.savefig('out/' + name + ".png")
-
-        os.chmod('out/' + name + '.png', 0o666)
-    else:
-        plt.show(fig)
-
-    plt.cla()
-
-def _connect_subgraph(G, a_nodes, b_nodes, same=False):
+def _connect_subgraph(G: nx.Graph, a_nodes: List[int], b_nodes: List[int], same=False):
     """Helper function. Connects graph."""
 
     # G must contain all nodes in a_nodes and b_nodes
@@ -100,17 +48,18 @@ def _connect_subgraph(G, a_nodes, b_nodes, same=False):
         if same and not has_connection:
             # if this node is marooned, connect it to the closest object
             sequence = [node for node in a_nodes if node != n_name]
-            if sequence == []:
+            if not sequence:
                 continue
             closest = min([node for node in a_nodes if node != n_name],
                           key=lambda o_name, t=this:
                           t.centroid.distance(G.nodes()[o_name]['shape'].centroid))
-            
+
             G.add_edge(n_name, closest, border=0.0)
 
 
 def _connect_graph(G):
     _connect_subgraph(G, list(G.nodes()), list(G.nodes()), same=True)
+
 
 def get_precinct_shapes(precinct_config):
     """Get precincts from file."""
@@ -122,7 +71,6 @@ def get_precinct_shapes(precinct_config):
     with cd(indir):
         with fiona.open(infile) as precincts:
             for shp in tqdm(precincts, "Reading precincts from shapefile"):
-
                 precinct_obj = shape(shp['geometry'])
                 precinct_data = shp['properties']
 
@@ -138,12 +86,13 @@ def get_precinct_shapes(precinct_config):
 
     return precinct_shapes
 
-def create_county_graph(county_config):
+
+def create_county_graph(county_config) -> nx.Graph:
     """Build a county graph."""
- 
+
     indir = county_config.get("directory", "wa-counties")
     infile = county_config.get("filename", "counties.shp")
-    
+
     draw_shapefile = county_config.get("draw_shapefile", False)
     draw_graph = county_config.get("draw_graph", False)
 
@@ -158,7 +107,7 @@ def create_county_graph(county_config):
             return nx.read_gpickle(os.path.join(indir, infile + ".annotated_graph.pickle"))
         elif os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
             return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
-        
+
     G = nx.Graph()
     # map English name (e.g., King County) to GEOID (e.g., 53033)
     name_to_geoid = {}
@@ -185,8 +134,7 @@ def create_county_graph(county_config):
     _connect_graph(G)
 
     if draw_graph:
-        pos = {n[0] : [n[1]['shape'].centroid.x, n[1]['shape'].centroid.y]
-               for n in G.nodes(data=True)}
+        pos = {n[0]: [n[1]['shape'].centroid.x, n[1]['shape'].centroid.y] for n in G.nodes(data=True)}
         nx.draw_networkx(G, pos=pos)
         plt.show()
 
@@ -197,12 +145,13 @@ def create_county_graph(county_config):
 
     return G
 
-def create_block_group_graph(block_group_config):
+
+def create_block_group_graph(block_group_config) -> nx.Graph:
     """Build a block group graph."""
- 
+
     indir = block_group_config.get("directory", "wa-block-groups")
     infile = block_group_config.get("filename", "block-groups.shp")
-    
+
     draw_shapefile = block_group_config.get("draw_shapefile", False)
     draw_graph = block_group_config.get("draw_graph", False)
 
@@ -215,7 +164,7 @@ def create_block_group_graph(block_group_config):
             return nx.read_gpickle(os.path.join(indir, infile + ".annotated_graph.pickle"))
         elif os.path.exists(os.path.join(indir, infile + ".graph.pickle")):
             return nx.read_gpickle(os.path.join(indir, infile + ".graph.pickle"))
-        
+
     G = nx.Graph()
 
     with cd(indir):
@@ -234,8 +183,7 @@ def create_block_group_graph(block_group_config):
     _connect_graph(G)
 
     if draw_graph:
-        pos = {n[0] : [n[1]['shape'].centroid.x, n[1]['shape'].centroid.y]
-               for n in G.nodes(data=True)}
+        pos = {n[0]: [n[1]['shape'].centroid.x, n[1]['shape'].centroid.y] for n in G.nodes(data=True)}
         nx.draw_networkx(G, pos=pos)
         plt.show()
 
@@ -244,12 +192,13 @@ def create_block_group_graph(block_group_config):
 
     return G
 
-def create_block_graph(block_config, block_groups):
+
+def create_block_graph(block_config, block_groups: nx.Graph) -> nx.Graph:
     """Using a block group graph as a base, build a block graph."""
 
     indir = block_config.get("directory", "wa-blocks")
     infile = block_config.get("filename", "blocks.shp")
-    
+
     draw_shapefile = block_config.get("draw_shapefile", False)
     draw_graph = block_config.get("draw_graph", False)
 
@@ -289,8 +238,7 @@ def create_block_graph(block_config, block_groups):
         _connect_subgraph(G, blocks_per_block_group[i], blocks_per_block_group[j])
 
     if draw_graph:
-        pos = {n[0] : [n[1]['shape'].centroid.x, n[1]['shape'].centroid.y]
-               for n in G.nodes(data=True)}
+        pos = {n[0]: [n[1]['shape'].centroid.x, n[1]['shape'].centroid.y] for n in G.nodes(data=True)}
         nx.draw_networkx(G, pos=pos)
         plt.show()
 
@@ -298,4 +246,3 @@ def create_block_graph(block_config, block_groups):
         nx.write_gpickle(G, os.path.join(indir, infile + ".graph.pickle"))
 
     return G
-

@@ -11,15 +11,17 @@ Some notation:
 import csv
 import os
 from collections import defaultdict
+from typing import Dict, List, Tuple
 
-import networkx as nx
-from tqdm import tqdm
-from shapely.geos import TopologicalError
 import fiona
+import networkx as nx
+from shapely.geos import TopologicalError
+from tqdm import tqdm
 
-import shape
+from elbridge.readers import shape
 
-def invert_precinct_map(graph):
+
+def invert_precinct_map(graph: nx.Graph) -> Dict[str, List[Tuple[int, float]]]:
     """Take a graph with node --> [(precinct, intersection area)] and return
     precinct --> [(node, intersection area)]."""
 
@@ -103,22 +105,20 @@ def add_precincts_county(co_config, pr_config, co_graph):
         county_name = pr_data.get('COUNTY')
 
         geoid = name_map[county_name]
-        
+
         co_shape = co_graph.node[geoid].get('shape')
         pr_shape = pr_shape.buffer(0)
         co_shape = co_shape.buffer(0)
         assert pr_shape.intersection(co_shape).area / pr_shape.area >= 0.9, \
-               pr_shape.intersection(co_shape).area / pr_shape.area
+            pr_shape.intersection(co_shape).area / pr_shape.area
 
         county_map[geoid].append((st_code, 1))
 
-    nx.set_node_attributes(co_graph,
-                           {county: value for county, value
-                            in county_map.items()},
-                           name='precincts')
+    nx.set_node_attributes(co_graph, {county: value for county, value in county_map.items()}, name='precincts')
+
     if pickle:
-        nx.write_gpickle(co_graph,
-                         os.path.join(indir, infile + ".annotated_graph.pickle"))
+        nx.write_gpickle(co_graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
+
 
 def add_precincts_block_group(bg_config, pr_config, co_graph, bg_graph):
     """Match each block group in a graph to the precinct that contains it.
@@ -157,11 +157,11 @@ def add_precincts_block_group(bg_config, pr_config, co_graph, bg_graph):
         if not bg_map[bg_node]:
             print("No precincts found for", bg_node)
 
-    nx.set_node_attributes(bg_graph, {bg: value for bg, value in bg_map.items()},
-                           name='precincts')
+    nx.set_node_attributes(bg_graph, {bg: value for bg, value in bg_map.items()}, name='precincts')
 
     if pickle:
         nx.write_gpickle(bg_graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
+
 
 def add_precincts_block(block_config, precinct_config, block_graph, block_group_graph):
     # pylint: disable=R0914
@@ -184,14 +184,12 @@ def add_precincts_block(block_config, precinct_config, block_graph, block_group_
 
     count = 0
 
-    for block_name, block_data in tqdm(block_graph.nodes(data=True),
-                                       "Assigning blocks to precincts"):
+    for block_name, block_data in tqdm(block_graph.nodes(data=True), "Assigning blocks to precincts"):
         if block_name is None:
             continue
 
         block_group_name = block_name[:-3]
-        precincts_over_block_group = block_group_graph.nodes()[block_group_name].get('precincts',
-                                                                                     [])
+        precincts_over_block_group = block_group_graph.nodes()[block_group_name].get('precincts', [])
 
         block_obj = block_data.get('shape')
         if block_obj is None or not block_obj.is_valid:
@@ -205,16 +203,14 @@ def add_precincts_block(block_config, precinct_config, block_graph, block_group_
                 try:
                     intersection_area = precinct_obj.intersection(block_obj).area
                 except TopologicalError:
-                    # plot_shapes([precinct_obj])
                     intersection_area = precinct_obj.buffer(0).intersection(block_obj).area
                 block_map[block_name].append((st_code, intersection_area))
 
-    nx.set_node_attributes(block_graph,
-                           {block: value for block, value in block_map.items()},
-                           name='precincts')
+    nx.set_node_attributes(block_graph, {block: value for block, value in block_map.items()}, name='precincts')
 
     if pickle:
         nx.write_gpickle(block_graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
+
 
 def add_census_data_county(config, graph):
     """Add census data to graph."""
@@ -239,8 +235,8 @@ def add_census_data_county(config, graph):
     with open(os.path.join(indir, data_indir, data_infile)) as data_file:
         records = csv.reader(data_file)
 
-        next(records) # skip header
-        next(records) # skip plaintext header
+        next(records)  # skip header
+        next(records)  # skip plaintext header
 
         for record in tqdm(records, "Reading records"):
             [_, geoid, _, _, _, _, _, _, _, _, _, _pop] = record
@@ -259,6 +255,7 @@ def add_census_data_county(config, graph):
 
     if pickle:
         nx.write_gpickle(graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
+
 
 def add_census_data_block_group(config, graph):
     """Add census data to graph."""
@@ -284,15 +281,15 @@ def add_census_data_block_group(config, graph):
     with open(os.path.join(indir, data_indir, data_infile)) as data_file:
         records = csv.reader(data_file)
 
-        next(records) # skip header
-        next(records) # skip plaintext header
+        next(records)  # skip header
+        next(records)  # skip plaintext header
 
         for record in tqdm(records, "Reading records"):
             [_, geoid, _, _pop, _] = record
             pop = int(_pop)
             if remove_empty_nodes and pop == 0:
                 empty_nodes.append(geoid)
-            else: # no need to create mapping for empty nodes if we're going to remove them anyway
+            else:  # no need to create mapping for empty nodes if we're going to remove them anyway
                 mapping[geoid] = pop
 
     if remove_empty_nodes:
@@ -302,6 +299,7 @@ def add_census_data_block_group(config, graph):
 
     if pickle:
         nx.write_gpickle(graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
+
 
 def add_census_data_from_shapefile(config, graph):
     """Add census data to graph from a shapefile.
@@ -344,11 +342,13 @@ def add_census_data_from_shapefile(config, graph):
     if pickle:
         nx.write_gpickle(graph, os.path.join(indir, infile + ".annotated_graph.pickle"))
 
+
 def initialize_county_graph(co_config, pr_config, data_config, co_graph):
     """Initialize county graph."""
     add_census_data_county(co_config, co_graph)
     # add_precincts_county(co_config, pr_config, co_graph)
     # add_election_data(data_config, co_config, co_graph)
+
 
 def initialize_block_group_graph(bg_config, pr_config, data_config, ct_graph, bg_graph):
     """Initialize block group graph."""
