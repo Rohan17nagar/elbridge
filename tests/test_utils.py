@@ -2,26 +2,24 @@ from unittest import TestCase
 
 import networkx as nx
 
+from elbridge.evolution.chromosome import Chromosome
 from elbridge.evolution.hypotheticals import HypotheticalSet
 from elbridge.utils import number_connected_components
 
 
 class ConnectedComponentsTest(TestCase):
-    def test_count_is_correct_if_no_edges_in_hypotheticals(self):
+    def test_count_is_correct_for_everything_in_one_component(self):
         graph = nx.path_graph(6)
-        hypotheticals = HypotheticalSet(set())
+        chromosome = Chromosome(graph, [1, 1, 1, 1, 1, 1])
 
-        self.assertEqual(number_connected_components(graph, list(range(6)), hypotheticals), 1)
+        self.assertEqual(number_connected_components(list(range(6)), chromosome), 1)
 
     def test_count_is_correct_with_edges_in_hypotheticals(self):
-        graph = nx.path_graph(6)
+        chromosome = Chromosome(nx.path_graph(6), [1, 1, 1, 2, 2, 2])
 
-        graph.remove_edge(2, 3)
-        hypotheticals = HypotheticalSet({(2, 3)})
-
-        self.assertEqual(number_connected_components(graph, list(range(6)), hypotheticals), 2)
-        self.assertEqual(number_connected_components(graph, list(range(3)), hypotheticals), 1)
-        self.assertEqual(number_connected_components(graph, list(range(4, 6)), hypotheticals), 1)
+        self.assertEqual(number_connected_components(list(range(6)), chromosome), 2)
+        self.assertEqual(number_connected_components(list(range(3)), chromosome), 1)
+        self.assertEqual(number_connected_components(list(range(4, 6)), chromosome), 1)
 
 
 

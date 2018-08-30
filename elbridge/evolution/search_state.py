@@ -1,23 +1,22 @@
 from typing import List, Optional
 
-from networkx import connected_component_subgraphs, Graph
+from networkx import connected_component_subgraphs
 
 from elbridge.evolution.chromosome import Chromosome
-from elbridge.evolution.hypotheticals import HypotheticalSet
 from elbridge.evolution.objectives import ObjectiveFunction
 from elbridge.readers import shape
 from elbridge.types import Node
-from elbridge.xceptions import ClassNotInitializedException, SameComponentException, IncompleteHypotheticalsException
+from elbridge.xceptions import ClassNotInitializedException
 
 
 class SearchState:
     """Encapsulates a state."""
     objectives: List[ObjectiveFunction] = []
 
-    def __init__(self, hypotheticals: HypotheticalSet, chromosome: Chromosome, scores: Optional[List[float]] = None):
+    def __init__(self, chromosome: Chromosome, scores: Optional[List[float]] = None):
         if not SearchState.objectives:
             raise ClassNotInitializedException(SearchState)
-        self.hypotheticals = hypotheticals.copy()
+
         self.chromosome = chromosome.copy()
         if scores:
             self.scores = scores
@@ -25,16 +24,15 @@ class SearchState:
             self.evaluate()
 
     def __hash__(self):
-        return self.hypotheticals.__hash__()
+        return self.chromosome.__hash__()
 
     def __eq__(self, other) -> bool:
-        return self.hypotheticals == other.hypotheticals
+        return self.chromosome == other.chromosome
 
     def __repr__(self) -> str:
-        return str(self.hypotheticals) + " (" + str(self._score_format()) + ")"
+        return str(self.chromosome) + " (" + str(self._score_format()) + ")"
 
     def __del__(self):
-        del self.hypotheticals
         del self.chromosome
 
     def _score_format(self) -> str:
@@ -44,33 +42,10 @@ class SearchState:
         ])
 
     def connect_vertices(self, i: Node, j: Node) -> None:
-        i_cmp = self.chromosome.get_component(i)
-        j_cmp = self.chromosome.get_component(j)
-        if i_cmp == j_cmp:
-            raise SameComponentException(i, j, i_cmp)
-
-        i_cmp, j_cmp = self.chromosome.join_vertices(j, i)
-
-        master_graph = self.chromosome.get_master_graph()
-
-        # for every node connected to j:
-        # if the node is in i's component, realize (j, n)
-        # if the node is in j's component, remove (j, n)
-        for n in master_graph[j]:
-            n_cmp = self.chromosome.get_component(n)
-            if n_cmp == i_cmp:
-                if (j, n) in self.hypotheticals:
-                    self.hypotheticals.remove_edge((j, n))
-                else:
-                    # hypotheticals *must* contain all edges that aren't in the graph
-                    raise IncompleteHypotheticalsException((n, j))
-            elif master_graph.has_edge(j, n):
-                # not in the hypothetical set, so it must be in the graph
-                self.hypotheticals.add_edge((j, n))
+        self.chromosome.join_vertices(j, i)
 
     def evaluate(self):
-        components = self.chromosome.get_components()
-        self.scores = [objective(components, self.hypotheticals) for objective in SearchState.objectives]
+        self.scores = [objective(self.chromosome) for objective in SearchState.objectives]
 
     def dominated_by(self, other: 'SearchState') -> bool:
         """Returns true if some scores dominate our score."""

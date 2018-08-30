@@ -8,7 +8,6 @@ from shapely.ops import cascaded_union
 
 from elbridge.evolution import objectives, search
 from elbridge.evolution.chromosome import Chromosome
-from elbridge.evolution.hypotheticals import HypotheticalSet
 from elbridge.evolution.objectives import ObjectiveFunction
 from elbridge.readers.plot import plot_shapes
 from elbridge.xceptions import ClassNotInitializedException, InconsistentSearchStateException
@@ -45,10 +44,8 @@ class Candidate:
         # distance to other candidates on front
         self.distance = 0
 
-        self.hypotheticals = self.chromosome.get_hypotheticals()
-        components = self.chromosome.get_components()
         self.scores_and_data = [
-            objective.call_with_data(components, self.hypotheticals) for objective in Candidate.objectives
+            objective.call_with_data(self.chromosome) for objective in Candidate.objectives
         ]
         self.scores = [score[0] for score in self.scores_and_data]
         self.score_data = [score[1] for score in self.scores_and_data]
@@ -112,6 +109,16 @@ class Candidate:
 
         return out
 
+    def optimize(self, pos=0):
+        """Convert a candidate into a state, optimize, and convert back."""
+        state = search.optimize(self.chromosome, pos=pos, steps=20, sample_size=50)
+        out = Candidate(state.chromosome)
+
+        if not out.scores == state.scores:
+            raise InconsistentSearchStateException(state, out)
+
+        return out
+
     def plot(self, save=False):
         """Plots a chromosome."""
         title = "Candidate {} ({})".format(self.name, self._score_format())
@@ -136,14 +143,3 @@ class Candidate:
             print(output)
 
         plot_shapes(shapes, random_color=True, title=title, save=save)
-
-    def optimize(self, pos=0):
-        """Convert a candidate into a state, optimize, and convert back."""
-        state = search.optimize(self, pos=pos, steps=20, sample_size=50)
-        out = Candidate(state.chromosome)
-
-        if not out.scores == state.scores:
-            raise InconsistentSearchStateException(state, out)
-
-        return out
-

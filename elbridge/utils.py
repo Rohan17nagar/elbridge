@@ -1,10 +1,8 @@
 """Various utility classes and methods."""
 import os
-from typing import Set, List
+from typing import List
 
-import networkx as nx
-
-from elbridge.evolution.hypotheticals import HypotheticalSet
+from elbridge.evolution.chromosome import Chromosome
 from elbridge.types import Node, FatNode
 
 
@@ -25,7 +23,7 @@ class cd:
         os.chdir(self.saved_path)
 
 
-def _connected_components(graph: nx.Graph, vertices: List[FatNode], hypotheticals: HypotheticalSet):
+def _connected_components(vertices: List[FatNode], chromosome: Chromosome):
     """
     Return the number of connected components in a graph. The edges of the graph are defined as E \ hypotheticals.
     :param graph:
@@ -33,6 +31,8 @@ def _connected_components(graph: nx.Graph, vertices: List[FatNode], hypothetical
     :param hypotheticals:
     :return:
     """
+    graph = chromosome.get_master_graph()
+
     def helper(source):
         """A fast BFS node generator"""
         _seen = set()
@@ -45,7 +45,7 @@ def _connected_components(graph: nx.Graph, vertices: List[FatNode], hypothetical
                     yield vertex
                     _seen.add(vertex)
                     for n in graph[vertex]:
-                        if n not in _seen and (vertex, n) not in hypotheticals:
+                        if n not in _seen and chromosome.in_same_component(vertex, n):
                             next_level.add(n)
 
     seen = set()
@@ -59,5 +59,5 @@ def _connected_components(graph: nx.Graph, vertices: List[FatNode], hypothetical
             seen.update(c)
 
 
-def number_connected_components(graph: nx.Graph, vertices: List[FatNode], hypotheticals: HypotheticalSet) -> int:
-    return sum(1 for _ in _connected_components(graph, vertices, hypotheticals))
+def number_connected_components(vertices: List[FatNode], chromosome: Chromosome) -> int:
+    return sum(1 for _ in _connected_components(vertices, chromosome))

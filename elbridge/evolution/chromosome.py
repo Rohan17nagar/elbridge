@@ -1,22 +1,25 @@
 from collections import defaultdict
 from random import randint, randrange
-from typing import List, Tuple
+from typing import List
 
-from networkx import Graph, is_frozen
+from networkx import Graph, is_frozen, freeze
 
 from elbridge.evolution.hypotheticals import HypotheticalSet
 from elbridge.types import Node
+from elbridge.xceptions import SameComponentException
 
 
 class Chromosome:
     """
     Chromosome. Stores an (immutable) master graph
     """
+
     def __init__(self, graph: Graph, vertex_set: List[Node]):
         if not is_frozen(graph):
-            raise Exception("Master graph must be frozen")
+            self._graph = freeze(graph)
+        else:
+            self._graph = graph
 
-        self._graph = graph
         if 'order' not in graph.graph:
             # require an order on the graph for consistency
             # order[i] = j implies that vertex i is located at index j in vertex_set
@@ -25,16 +28,19 @@ class Chromosome:
         self._assignment = vertex_set[:]
         self._normalize()
 
-    def copy(self):
+    def copy(self) -> 'Chromosome':
         return Chromosome(self._graph, self._assignment[:])
 
     def __eq__(self, other):
-        return self._assignment == other._assignment
+        return self.get_assignment() == other.get_assignment()
 
     def __hash__(self):
         return tuple(self._assignment).__hash__()
 
-    def _normalize(self):
+    def __repr__(self):
+        return repr(self._assignment)
+
+    def _normalize(self) -> None:
         # normalize the chromosome: [1, 2, 3, 5, 4] -> [1, 2, 3, 4, 5]
         mapping = {}
         ind = 1
@@ -48,13 +54,13 @@ class Chromosome:
 
         self._assignment = normalized_assignment
 
-    def get_master_graph(self):
+    def get_master_graph(self) -> Graph:
         return self._graph
 
-    def get_assignment(self):
+    def get_assignment(self) -> List[Node]:
         return self._assignment
 
-    def join_vertices(self, j: Node, i: Node):
+    def join_vertices(self, j: Node, i: Node) -> None:
         """
         Sets j's component to i, and returns the new components of both.
 
@@ -64,13 +70,14 @@ class Chromosome:
         :param i:
         :return: None.
         """
+        if self.in_same_component(i, j):
+            raise SameComponentException(i, j, self.get_component(i))
+
         j_index = self.get_index(j)
         i_cmp = self.get_component(i)
 
         self._assignment[j_index] = i_cmp
         self._normalize()
-
-        return self.get_component(i), self.get_component(j)
 
     def get_hypotheticals(self) -> HypotheticalSet:
         """
@@ -80,8 +87,7 @@ class Chromosome:
         hypotheticals = HypotheticalSet(set())
 
         for i, j in self._graph.edges():
-            if self.get_component(i) != self.get_component(j):
-                # vertices i and j are in different components; remove the edge
+            if not self.in_same_component(i, j):
                 hypotheticals.add_edge((i, j))
 
         return hypotheticals
@@ -114,6 +120,9 @@ class Chromosome:
         """
         vertex_index = self.get_index(vertex)
         return self._assignment[vertex_index]
+
+    def in_same_component(self, i: Node, j: Node) -> bool:
+        return self.get_component(i) == self.get_component(j)
 
     def get_components(self) -> List[list]:
         """

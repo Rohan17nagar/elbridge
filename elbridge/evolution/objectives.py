@@ -2,12 +2,11 @@
 chromosomes have higher values."""
 
 import statistics
-from typing import List, Tuple, Dict, Any
+from typing import Tuple, Dict, Any
 
 import networkx as nx
 
-from elbridge.evolution.hypotheticals import HypotheticalSet
-from elbridge.types import FatNode
+from elbridge.evolution.chromosome import Chromosome
 from elbridge.utils import number_connected_components
 from elbridge.xceptions import KeyNotFoundException
 
@@ -28,15 +27,13 @@ class ObjectiveFunction:
 
 
 class PopulationEquality(ObjectiveFunction):
-    # pylint: disable=R0903
     """Test population equality."""
 
     def __init__(self, master_graph, key='pop', districts=DISTRICTS):
-        self.master_graph = master_graph
         self.key = key
         self.districts = districts
 
-        self.total_pop = sum([data.get(self.key, 0) for _, data in self.master_graph.nodes(data=True)])
+        self.total_pop = sum([data.get(self.key, 0) for _, data in master_graph.nodes(data=True)])
         self.min_value = 0
         self.max_value = self.total_pop / self.districts
 
@@ -48,8 +45,9 @@ class PopulationEquality(ObjectiveFunction):
         return "Population equality"
 
     @profile
-    def __call__(self, components: List[List[FatNode]], hypotheticals: HypotheticalSet) -> float:
-        """Returns the mean absolute deviation of subgraph population."""
+    def __call__(self, chromosome: Chromosome) -> float:
+        """Returns the minimum subgraph population."""
+        components = chromosome.get_components()
         score = float('inf')
 
         ncc = 0
@@ -62,7 +60,7 @@ class PopulationEquality(ObjectiveFunction):
                 component_score += data.get(self.key)
 
             score = min(score, component_score)
-            ncc += number_connected_components(self.master_graph, component, hypotheticals)
+            ncc += number_connected_components(component, chromosome)
 
         min_score = score
 
@@ -79,13 +77,12 @@ class PopulationEquality(ObjectiveFunction):
 
         return score
 
-    def call_with_data(self, components: List[FatNode], hypotheticals: HypotheticalSet) -> Tuple[float, Dict[str, Any]]:
-        output = self.__call__(components, hypotheticals)
+    def call_with_data(self, chromosome: Chromosome) -> Tuple[float, Dict[str, Any]]:
+        output = self.__call__(chromosome)
         return output, self.data
 
 
 class SizeEquality(ObjectiveFunction):
-    # pylint: disable=R0903
     """Test size equality. For testing purposes only"""
 
     def __init__(self, graph, districts=DISTRICTS):
