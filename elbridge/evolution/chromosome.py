@@ -5,8 +5,8 @@ from typing import List
 from networkx import Graph, is_frozen, freeze
 
 from elbridge.evolution.hypotheticals import HypotheticalSet
-from elbridge.types import Node
-from elbridge.xceptions import SameComponentException
+from elbridge.utilities.types import Node
+from elbridge.utilities.xceptions import SameComponentException
 
 
 class Chromosome:

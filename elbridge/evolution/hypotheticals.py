@@ -1,7 +1,6 @@
-import copy
 from typing import Set
 
-from elbridge.types import Edge
+from elbridge.utilities.types import Edge
 
 
 class HypotheticalSet:

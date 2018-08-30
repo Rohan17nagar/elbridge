@@ -3,8 +3,7 @@ from unittest import TestCase
 import networkx as nx
 
 from elbridge.evolution.chromosome import Chromosome
-from elbridge.evolution.hypotheticals import HypotheticalSet
-from elbridge.utils import number_connected_components
+from elbridge.utilities.utils import number_connected_components
 
 
 class ConnectedComponentsTest(TestCase):

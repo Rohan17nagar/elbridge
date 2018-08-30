@@ -5,12 +5,7 @@ import json
 import logging
 from datetime import datetime
 
-import matplotlib
-
 from elbridge.runners.runner import evaluate
-
-# prevent X11 errors on matplotlib graph creation
-matplotlib.use('Agg')
 
 
 def parse_arguments():

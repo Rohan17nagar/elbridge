@@ -7,8 +7,8 @@ from typing import Tuple, Dict, Any
 import networkx as nx
 
 from elbridge.evolution.chromosome import Chromosome
-from elbridge.utils import number_connected_components
-from elbridge.xceptions import KeyNotFoundException
+from elbridge.utilities.utils import number_connected_components
+from elbridge.utilities.xceptions import KeyNotFoundException
 
 DISTRICTS = 10
 

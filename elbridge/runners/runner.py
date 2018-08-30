@@ -2,7 +2,7 @@ import networkx as nx
 
 from elbridge.readers import shape, annotater
 from elbridge.runners import evaluation
-from elbridge.utils import cd
+from elbridge.utilities.utils import cd
 
 
 def create_graphs(data_dir, configs):

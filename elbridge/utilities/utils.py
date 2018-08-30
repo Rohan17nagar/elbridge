@@ -3,7 +3,7 @@ import os
 from typing import List
 
 from elbridge.evolution.chromosome import Chromosome
-from elbridge.types import Node, FatNode
+from elbridge.utilities.types import Node, FatNode
 
 
 class cd:

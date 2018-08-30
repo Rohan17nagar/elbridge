@@ -1,13 +1,16 @@
 # pylint: disable=C0103, C0200
 """Local search."""
 import random
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from tqdm import tqdm
 
 from elbridge.evolution.chromosome import Chromosome
 from elbridge.evolution.search_state import SearchState
-from elbridge.types import Edge
+from elbridge.utilities.types import Edge
+
+
+StateCache = Dict[SearchState, SearchState]
 
 
 @profile
@@ -25,7 +28,7 @@ def make_step(state: SearchState, edge: Edge) -> Optional[SearchState]:
 
 
 @profile
-def find_best_neighbor(state: SearchState, sample_size: int = 50) -> Optional[SearchState]:
+def find_best_neighbor(state: SearchState, sample_size: int = 100) -> Optional[SearchState]:
     """Find the best neighbors of this state."""
     moves = state.chromosome.get_hypotheticals().edges
     samples = random.sample(moves, min(len(moves), sample_size))
@@ -51,7 +54,7 @@ def optimize(chromosome: Chromosome, scores: Optional[List[float]] = None, pos: 
     state = SearchState(chromosome, scores=scores)
 
     for _ in tqdm(range(steps), "Taking steps", position=pos):
-        new_state = find_best_neighbor(state, sample_size)
+        new_state = find_best_neighbor(state, sample_size=sample_size)
         if new_state is None:
             return state
 

@@ -10,7 +10,7 @@ from elbridge.evolution import objectives, search
 from elbridge.evolution.chromosome import Chromosome
 from elbridge.evolution.objectives import ObjectiveFunction
 from elbridge.readers.plot import plot_shapes
-from elbridge.xceptions import ClassNotInitializedException, InconsistentSearchStateException
+from elbridge.utilities.xceptions import ClassNotInitializedException, InconsistentSearchStateException
 
 
 class Candidate:

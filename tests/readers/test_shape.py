@@ -17,7 +17,7 @@ import networkx as nx
 from shapely.geometry import mapping, box
 
 from elbridge.readers import shape
-from elbridge.utils import cd
+from elbridge.utilities.utils import cd
 
 
 def generate_test_data():

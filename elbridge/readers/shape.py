@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 # utilities
 from elbridge.readers.plot import plot_shapes
-from elbridge.utils import cd
+from elbridge.utilities.utils import cd
 
 
 def _connect_subgraph(G: nx.Graph, a_nodes: List[int], b_nodes: List[int], same=False):

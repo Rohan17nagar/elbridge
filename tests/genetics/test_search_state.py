@@ -5,7 +5,7 @@ import networkx as nx
 
 from elbridge.evolution.chromosome import Chromosome
 from elbridge.evolution.search_state import SearchState
-from elbridge.xceptions import SameComponentException
+from elbridge.utilities.xceptions import SameComponentException
 
 
 class SearchStateTest(TestCase):

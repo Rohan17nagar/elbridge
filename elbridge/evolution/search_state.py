@@ -5,8 +5,8 @@ from networkx import connected_component_subgraphs
 from elbridge.evolution.chromosome import Chromosome
 from elbridge.evolution.objectives import ObjectiveFunction
 from elbridge.readers import shape
-from elbridge.types import Node
-from elbridge.xceptions import ClassNotInitializedException
+from elbridge.utilities.types import Node
+from elbridge.utilities.xceptions import ClassNotInitializedException
 
 
 class SearchState:
