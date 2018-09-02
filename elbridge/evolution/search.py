@@ -1,5 +1,6 @@
 # pylint: disable=C0103, C0200
 """Local search."""
+import gc
 import random
 from typing import Optional, List, Dict
 
@@ -13,7 +14,6 @@ from elbridge.utilities.types import Edge
 StateCache = Dict[SearchState, SearchState]
 
 
-@profile
 def make_step(state: SearchState, edge: Edge) -> Optional[SearchState]:
     i, j = edge
 
@@ -27,7 +27,6 @@ def make_step(state: SearchState, edge: Edge) -> Optional[SearchState]:
     return None
 
 
-@profile
 def find_best_neighbor(state: SearchState, sample_size: int = 100) -> Optional[SearchState]:
     """Find the best neighbors of this state."""
     moves = state.chromosome.get_hypotheticals().edges
@@ -36,7 +35,7 @@ def find_best_neighbor(state: SearchState, sample_size: int = 100) -> Optional[S
     best_state = None
     best_gradient = float('-inf')
 
-    for move in samples:
+    for move in tqdm(samples):
         new_state = make_step(state, move)
         if new_state:
             new_gradient = state.gradient(new_state)
@@ -47,7 +46,6 @@ def find_best_neighbor(state: SearchState, sample_size: int = 100) -> Optional[S
     return best_state
 
 
-@profile
 def optimize(chromosome: Chromosome, scores: Optional[List[float]] = None, pos: int = 0,
              steps: int = 1000, sample_size: int = 100) -> SearchState:
     """Take a solution and return a nearby local maximum."""
@@ -59,5 +57,6 @@ def optimize(chromosome: Chromosome, scores: Optional[List[float]] = None, pos: 
             return state
 
         state = new_state
+        gc.collect()
 
     return state

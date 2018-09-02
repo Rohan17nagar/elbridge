@@ -20,6 +20,18 @@ class ConnectedComponentsTest(TestCase):
         self.assertEqual(number_connected_components(list(range(3)), chromosome), 1)
         self.assertEqual(number_connected_components(list(range(4, 6)), chromosome), 1)
 
+    def test_count_is_correct_for_point_graph(self):
+        graph = nx.Graph()
+        graph.add_nodes_from(range(10))
+        graph.add_edge(0, 1)
+        chromosome = Chromosome(graph, [1, 1, 2, 2, 2, 2, 2, 2, 2])
+
+        self.assertEqual(number_connected_components(list(range(10)), chromosome), 9)
+        self.assertEqual(number_connected_components(list(range(2)), chromosome), 1)
+        for i in range(3, 10):
+            self.assertEqual(number_connected_components([i], chromosome), 1)
+
+
 
 
 

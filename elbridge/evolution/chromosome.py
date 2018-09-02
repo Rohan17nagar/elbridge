@@ -53,6 +53,7 @@ class Chromosome:
             normalized_assignment.append(mapping.get(cur_comp))
 
         self._assignment = normalized_assignment
+        self._rebuild_components()
 
     def get_master_graph(self) -> Graph:
         return self._graph
@@ -78,6 +79,7 @@ class Chromosome:
 
         self._assignment[j_index] = i_cmp
         self._normalize()
+        self._rebuild_components()
 
     def get_hypotheticals(self) -> HypotheticalSet:
         """
@@ -103,6 +105,7 @@ class Chromosome:
     def mutate(self):
         element = randrange(len(self._assignment))
         self._assignment[element] = randint(1, max(self._assignment))
+        self._rebuild_components()
 
     def get_index(self, vertex: Node) -> int:
         """
@@ -125,6 +128,9 @@ class Chromosome:
         return self.get_component(i) == self.get_component(j)
 
     def get_components(self) -> List[list]:
+        return self._components
+
+    def _rebuild_components(self) -> None:
         """
         Return a map of component IDs to vertices in that component.
         :return:
@@ -134,4 +140,4 @@ class Chromosome:
             vertex_component = self.get_component(vertex)
             components[vertex_component].append((vertex, data))
 
-        return list(components.values())
+        self._components = list(components.values())

@@ -23,6 +23,22 @@ class cd:
         os.chdir(self.saved_path)
 
 
+def _fast_bfs(source, graph, chromosome):
+    _seen = set()
+    next_level = {source}
+    while next_level:
+        this_level = next_level
+        next_level = set()
+        for vertex in this_level:
+            if vertex not in _seen:
+                yield vertex
+                _seen.add(vertex)
+                for n in graph[vertex]:
+                    if n not in _seen:
+                        if chromosome.in_same_component(vertex, n):
+                            next_level.add(n)
+
+
 def _connected_components(vertices: List[FatNode], chromosome: Chromosome):
     """
     Return the number of connected components in a graph. The edges of the graph are defined as E \ hypotheticals.
@@ -33,28 +49,13 @@ def _connected_components(vertices: List[FatNode], chromosome: Chromosome):
     """
     graph = chromosome.get_master_graph()
 
-    def helper(source):
-        """A fast BFS node generator"""
-        _seen = set()
-        next_level = {source}
-        while next_level:
-            this_level = next_level
-            next_level = set()
-            for vertex in this_level:
-                if vertex not in _seen:
-                    yield vertex
-                    _seen.add(vertex)
-                    for n in graph[vertex]:
-                        if n not in _seen and chromosome.in_same_component(vertex, n):
-                            next_level.add(n)
-
     seen = set()
     if isinstance(vertices[0], tuple):
         vertices: List[Node] = list(map(lambda i: i[0], vertices))
 
     for v in vertices:
         if v not in seen:
-            c = set(helper(v))
+            c = set(_fast_bfs(v, graph, chromosome))
             yield c
             seen.update(c)
 

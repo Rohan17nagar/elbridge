@@ -67,7 +67,6 @@ class PopulationEquality(ObjectiveFunction):
         self.data['min_score'] = score
 
         # punish district maps with more than d ccomps
-        # this punishes disconnected districts
         score -= min_score * (ncc - self.districts)
         self.data['components'] = ncc
 

@@ -18,10 +18,7 @@ class SearchState:
             raise ClassNotInitializedException(SearchState)
 
         self.chromosome = chromosome.copy()
-        if scores:
-            self.scores = scores
-        else:
-            self.evaluate()
+        self.scores = scores or []
 
     def __hash__(self):
         return self.chromosome.__hash__()
