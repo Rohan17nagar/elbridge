@@ -28,7 +28,7 @@ class ChromosomeTest(TestCase):
         # test on a path graph
         chromosome = Chromosome(self.simple_graph, [1, 1, 2, 2])
 
-        new_chromosome = chromosome.connect_vertices(1, 2)
+        new_chromosome = chromosome.connect_vertices((1, 2))
         self.assertEqual(new_chromosome.get_assignment(), [1, 1, 1, 2])
         self.assertEqual(new_chromosome.get_components(), {1: {0, 1, 2}, 2: {3}})
         self.assertEqual(new_chromosome.get_component_scores(), {
@@ -40,7 +40,7 @@ class ChromosomeTest(TestCase):
         # test on a path graph
         chromosome = Chromosome(self.simple_graph, [1, 1, 2, 2])
 
-        new_chromosome = chromosome.connect_vertices(1, 2).connect_vertices(2, 3)
+        new_chromosome = chromosome.connect_vertices((1, 2)).connect_vertices((2, 3))
 
         self.assertEqual(new_chromosome.get_assignment(), [1, 1, 1, 1])
         self.assertEqual(new_chromosome.get_components(), {1: {0, 1, 2, 3}})
@@ -50,7 +50,7 @@ class ChromosomeTest(TestCase):
 
     def test_connect_vertices_fails_if_same_component(self):
         with self.assertRaises(SameComponentException):
-            Chromosome(self.simple_graph, [1, 1, 1, 1]).connect_vertices(2, 3)
+            Chromosome(self.simple_graph, [1, 1, 1, 1]).connect_vertices((2, 3))
 
     def test_connect_vertices_complex_graph(self):
         graph = nx.grid_graph([3, 3])
@@ -59,11 +59,11 @@ class ChromosomeTest(TestCase):
 
         chromosome = Chromosome(graph, [1, 1, 1, 1, 1, 1, 2, 2, 2])
 
-        chromosome = chromosome.connect_vertices((1, 1), (2, 1))
+        chromosome = chromosome.connect_vertices(((1, 1), (2, 1)))
         self.assertEqual(chromosome.get_assignment(), [1, 1, 1, 1, 1, 1, 2, 1, 2])
 
-        chromosome = chromosome.connect_vertices((2, 1), (2, 0))
+        chromosome = chromosome.connect_vertices(((2, 1), (2, 0)))
         self.assertEqual(chromosome.get_assignment(), [1, 1, 1, 1, 1, 1, 1, 1, 2])
 
-        chromosome = chromosome.connect_vertices((2, 1), (2, 2))
+        chromosome = chromosome.connect_vertices(((2, 1), (2, 2)))
         self.assertEqual(chromosome.get_assignment(), [1, 1, 1, 1, 1, 1, 1, 1, 1])

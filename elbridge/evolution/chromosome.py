@@ -7,7 +7,7 @@ from networkx import Graph, is_frozen, freeze, nx, connected_component_subgraphs
 
 from elbridge.evolution.hypotheticals import HypotheticalSet
 from elbridge.readers.plot import plot_shapes
-from elbridge.utilities.types import Node, Component, FatNode
+from elbridge.utilities.types import Node, Component, FatNode, Edge
 from elbridge.utilities.utils import dominates, gradient, number_connected_components
 from elbridge.utilities.xceptions import SameComponentException, ClassNotInitializedException
 
@@ -52,7 +52,6 @@ class Chromosome:
         else:
             self._compute_component_scores()
 
-        self._normalize()
         self._compute_scores()
 
     def _rebuild_components(self) -> None:
@@ -125,7 +124,7 @@ class Chromosome:
         plt.show()
 
     @profile
-    def _normalize(self) -> None:
+    def normalize(self) -> None:
         # normalize the chromosome: [1, 2, 3, 5, 4] -> [1, 2, 3, 4, 5]
         mapping = {}  # old component -> normalized component
         ind = 1
@@ -199,10 +198,11 @@ class Chromosome:
         return gradient(other._scores, self._scores)
 
     @profile
-    def connect_vertices(self, i: Node, j: Node) -> 'Chromosome':
+    def connect_vertices(self, edge: Edge) -> 'Chromosome':
         """
         Moves j to i's component, and returns a new Chromosome.
         """
+        i, j = edge
         if self.in_same_component(i, j):
             raise SameComponentException(i, j, self.get_component(i))
 

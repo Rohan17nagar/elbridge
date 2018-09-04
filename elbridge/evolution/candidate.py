@@ -112,6 +112,7 @@ class Candidate:
     def optimize(self, pos=0):
         """Convert a candidate into a state, optimize, and convert back."""
         state = search.optimize(self.chromosome, pos=pos, steps=20, sample_size=50)
+        state.normalize()
         out = Candidate(state.chromosome)
 
         if not out.scores == state.scores:

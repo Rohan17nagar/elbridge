@@ -1,6 +1,7 @@
 """Various utility classes and methods."""
+import functools
 import os
-from typing import List, Set
+from typing import List, Set, Dict
 
 from networkx import Graph
 
@@ -59,7 +60,3 @@ def number_connected_components(graph: Graph, component: Component) -> int:
         count += 1
 
     return count
-
-
-
-
