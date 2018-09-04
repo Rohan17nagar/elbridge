@@ -126,7 +126,7 @@ class Candidate:
         output = title + "\n"
         shapes = []
 
-        for i, component in enumerate(self.chromosome.get_components()):
+        for idx, component in self.chromosome.get_components():
             comp_shape = cascaded_union([data.get('shape') for _, data in component])
             shapes.append(comp_shape)
 

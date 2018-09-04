@@ -1,9 +1,10 @@
 """Various utility classes and methods."""
 import os
-from typing import List
+from typing import List, Set
 
-from elbridge.evolution.chromosome import Chromosome
-from elbridge.utilities.types import Node, FatNode
+from networkx import Graph
+
+from elbridge.utilities.types import Component, Node
 
 
 class cd:
@@ -23,42 +24,42 @@ class cd:
         os.chdir(self.saved_path)
 
 
-def _fast_bfs(source, graph, chromosome):
-    _seen = set()
-    next_level = {source}
-    while next_level:
-        this_level = next_level
-        next_level = set()
-        for vertex in this_level:
-            if vertex not in _seen:
-                yield vertex
-                _seen.add(vertex)
-                for n in graph[vertex]:
-                    if n not in _seen:
-                        if chromosome.in_same_component(vertex, n):
-                            next_level.add(n)
+def dominates(a_scores: List[float], b_scores: List[float]) -> float:
+    as_good = True
+    better = False
+    for idx in range(len(a_scores)):
+        if b_scores[idx] > a_scores[idx]:
+            as_good = False
+            break
+        elif b_scores[idx] < a_scores[idx]:
+            better = True
+
+    return as_good and better
 
 
-def _connected_components(vertices: List[FatNode], chromosome: Chromosome):
-    """
-    Return the number of connected components in a graph. The edges of the graph are defined as E \ hypotheticals.
-    :param graph:
-    :param vertices:
-    :param hypotheticals:
-    :return:
-    """
-    graph = chromosome.get_master_graph()
-
-    seen = set()
-    if isinstance(vertices[0], tuple):
-        vertices: List[Node] = list(map(lambda i: i[0], vertices))
-
-    for v in vertices:
-        if v not in seen:
-            c = set(_fast_bfs(v, graph, chromosome))
-            yield c
-            seen.update(c)
+def gradient(a_scores: List[float], b_scores: List[float]) -> float:
+    return sum(a_scores[i] - b_scores[i] for i in range(len(a_scores)))
 
 
-def number_connected_components(vertices: List[FatNode], chromosome: Chromosome) -> int:
-    return sum(1 for _ in _connected_components(vertices, chromosome))
+@profile
+def number_connected_components(graph: Graph, component: Component) -> int:
+    remaining: Set[Node] = set(component)
+    count = 0
+
+    while remaining:
+        source = remaining.pop()
+        frontier: Set[Node] = {source}
+
+        while frontier:
+            node: Node = frontier.pop()
+            neighbors = graph[node]
+            for neighbor in filter(lambda n: n in remaining, neighbors):
+                remaining.remove(neighbor)
+                frontier.add(neighbor)
+        count += 1
+
+    return count
+
+
+
+

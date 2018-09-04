@@ -2,36 +2,51 @@ from unittest import TestCase
 
 import networkx as nx
 
-from elbridge.evolution.chromosome import Chromosome
-from elbridge.utilities.utils import number_connected_components
+from elbridge.utilities.utils import dominates, gradient, number_connected_components
 
 
-class ConnectedComponentsTest(TestCase):
-    def test_count_is_correct_for_everything_in_one_component(self):
-        graph = nx.path_graph(6)
-        chromosome = Chromosome(graph, [1, 1, 1, 1, 1, 1])
+class UtilsTest(TestCase):
+    def test_dominates(self):
+        s1 = [1, 1]
+        s2 = [2, 1]
+        self.assertTrue(dominates(s2, s1))
+        self.assertFalse(dominates(s1, s2))
 
-        self.assertEqual(number_connected_components(list(range(6)), chromosome), 1)
+        s1 = [1, 1]
+        s2 = [2, 2]
+        self.assertTrue(dominates(s2, s1))
+        self.assertFalse(dominates(s1, s2))
 
-    def test_count_is_correct_with_edges_in_hypotheticals(self):
-        chromosome = Chromosome(nx.path_graph(6), [1, 1, 1, 2, 2, 2])
+        s1 = [1, 1]
+        s2 = [1, 1]
+        self.assertFalse(dominates(s2, s1))
+        self.assertFalse(dominates(s1, s2))
 
-        self.assertEqual(number_connected_components(list(range(6)), chromosome), 2)
-        self.assertEqual(number_connected_components(list(range(3)), chromosome), 1)
-        self.assertEqual(number_connected_components(list(range(4, 6)), chromosome), 1)
+        s1 = [1, 2]
+        s2 = [2, 1]
+        self.assertFalse(dominates(s2, s1))
+        self.assertFalse(dominates(s1, s2))
 
-    def test_count_is_correct_for_point_graph(self):
-        graph = nx.Graph()
-        graph.add_nodes_from(range(10))
-        graph.add_edge(0, 1)
-        chromosome = Chromosome(graph, [1, 1, 2, 2, 2, 2, 2, 2, 2])
+    def test_gradient(self):
+        s1 = [1, 1]
+        s2 = [2, 2]
+        self.assertEqual(gradient(s2, s1), 2)
+        self.assertEqual(gradient(s1, s2), -2)
 
-        self.assertEqual(number_connected_components(list(range(10)), chromosome), 9)
-        self.assertEqual(number_connected_components(list(range(2)), chromosome), 1)
-        for i in range(3, 10):
-            self.assertEqual(number_connected_components([i], chromosome), 1)
+        s1 = [1, 2]
+        s2 = [2, 2]
+        self.assertEqual(gradient(s2, s1), 1)
+        self.assertEqual(gradient(s1, s2), -1)
 
+        s1 = [1, 2]
+        s2 = [2, 1]
+        self.assertEqual(gradient(s2, s1), 0)
+        self.assertEqual(gradient(s1, s2), 0)
 
+    def test_ncc(self):
+        graph = nx.path_graph(10)
+        graph.remove_edge(4, 5)
 
-
-
+        self.assertEqual(number_connected_components(graph, set(range(10))), 2)
+        self.assertEqual(number_connected_components(graph, set(range(5))), 1)
+        self.assertEqual(number_connected_components(graph, set(range(5, 10))), 1)
