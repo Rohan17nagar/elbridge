@@ -10,8 +10,8 @@ import networkx as nx
 from tqdm import tqdm
 
 from elbridge.evolution.candidate import Candidate
-from elbridge.evolution.objectives import ObjectiveFunction
-from elbridge.evolution.search import SearchState
+from elbridge.evolution.chromosome import Chromosome
+from elbridge.evolution.objectives import ObjectiveFunction, DISTRICTS
 
 # use this to mute tqdm
 tqdm = lambda x, *y, **z: x
@@ -23,7 +23,7 @@ Parents = Tuple[Candidate, Candidate]
 
 def fast_non_dominated_sort(population: Population) -> List[Frontier]:
     """Take a population P and sort it into fronts F1, F2, ..., Fn."""
-    fronts: List[List[Candidate]] = [[]]
+    fronts: List[Frontier] = [[]]
 
     for p in population:
         p.refresh()
@@ -62,17 +62,18 @@ def fast_non_dominated_sort(population: Population) -> List[Frontier]:
 
 def crowding_distance_assignment(frontier: Frontier):
     """Take a Pareto frontier and calculate distances between candidates."""
-    for idx, _ in enumerate(Candidate.objectives):
+    for idx, obj_fn in enumerate(Chromosome.objectives):
         # sort by each objective function
-        frontier.sort(key=lambda p, idx=idx: p.scores[idx])
+        frontier.sort(key=lambda p, index=idx: p.chromosome.get_scores()[index])
 
         # the boundary points for each objective should always be preserved
         frontier[0].distance = float('inf')
         frontier[-1].distance = float('inf')
 
         for i, _ in enumerate(frontier[1:-1]):
-            score_range = abs((frontier[i + 1].scores[idx] - frontier[i - 1].scores[idx]))
-            objective_range = Candidate.objectives[idx].max_value - Candidate.objectives[idx].min_value
+            score_range = abs((frontier[i + 1].chromosome.get_scores()[idx]
+                               - frontier[i - 1].chromosome.get_scores()[idx]))
+            objective_range = obj_fn.max_value - obj_fn.min_value
             frontier[i].distance += score_range / objective_range
 
 
@@ -86,27 +87,15 @@ def crowding_operator(p: Candidate, q: Candidate) -> int:
 
 
 def select_parent(population: Population, k: int = 3) -> Candidate:
-    return sorted(random.sample(population, k), key=functools.cmp_to_key(crowding_operator))[0]
+    return min(random.sample(population, k), key=functools.cmp_to_key(crowding_operator))
 
 
-def select_parents(population: Population) -> Parents:
-    """Return two parent solutions.
-
-    Uses k-ary tournament selection, where k individuals are selected and ranked by the
-    crowding comparison operator.
-
-    If random_select is True, randomly choose parents."""
-    parents = (select_parent(population), select_parent(population))
-
-    return parents
-
-
-def make_children(parents: Population) -> Population:
+def make_children(parents: Population, mutation_probability: float) -> Population:
     """Take a parent population and return an equally-sized child population."""
     children = []
     for _ in tqdm(range(len(parents) // 2), desc="Making children"):
-        parent_a, parent_b = select_parents(parents)
-        offspring = parent_a.crossover_and_mutate(parent_b)
+        parent_a, parent_b = (select_parent(parents), select_parent(parents))
+        offspring = parent_a.crossover_and_mutate(parent_b, mutation_probability)
         children += offspring
 
     return children
@@ -114,21 +103,25 @@ def make_children(parents: Population) -> Population:
 
 def make_adam_and_eve(master_graph: nx.Graph, population_size: int) -> Population:
     """Makes the first generation."""
-    parents = [Candidate.generate(master_graph) for _ in tqdm(range(population_size), desc="Creating first parents")]
-    return parents
+    return [
+        Candidate(Chromosome(master_graph, [random.randint(1, DISTRICTS) for _ in master_graph]))
+        for _ in range(population_size)
+    ]
 
 
 def _optimize(arg):
     pos, c = arg
-    return c.optimize(pos)
+    return c.optimize(pos=pos)
 
 
-def _optimize_children(raw_offspring: Population, multiprocess=True) -> Population:
+def _optimize_children(raw_offspring: Population, multiprocess: bool = True) -> Population:
     offspring = []
     if multiprocess:
         with TPool() as p:
-            for child in tqdm(p.imap_unordered(_optimize, enumerate(raw_offspring)), total=len(raw_offspring),
-                              desc="Optimizing children"):
+            for child in tqdm(
+                    p.imap_unordered(_optimize, enumerate(raw_offspring)), total=len(raw_offspring),
+                    desc="Optimizing children"
+            ):
                 offspring.append(child)
     else:
         for idx_child in tqdm(enumerate(raw_offspring), desc="Optimizing children"):
@@ -138,10 +131,10 @@ def _optimize_children(raw_offspring: Population, multiprocess=True) -> Populati
 
 
 def _get_best_frontier(frontiers: List[Frontier]):
-    return set([tuple(cand.scores) for cand in frontiers[0]])
+    return set([tuple(cand.chromosome.get_scores()) for cand in frontiers[0]])
 
 
-def evaluate_generation(parents, offspring):
+def evaluate_generation(parents: Population, offspring: Population) -> Tuple[Population, List[Frontier]]:
     combined_population = parents + offspring
     frontiers = fast_non_dominated_sort(combined_population)
 
@@ -166,11 +159,9 @@ def evaluate_generation(parents, offspring):
 
 
 @profile
-def run_nsga2(master_graph: nx.Graph, config: Dict[str, Any],
-              objective_fns: List[Tuple[ObjectiveFunction, Dict[str, Any]]]):
-    # pylint: disable=dangerous-default-value, too-many-locals, too-many-branches, too-many-statements
+def run_nsga2(master_graph: nx.Graph, config: Dict[str, Any], objective_fns: List[Tuple[ObjectiveFunction, dict]]):
     """Runs NSGA-II."""
-    Candidate.objectives = SearchState.objectives = [cls(master_graph, **args) for cls, args in objective_fns]
+    Chromosome.objectives = [cls(master_graph, **args) for cls, args in objective_fns]
 
     # how many generations to run for
     max_generations: int = config.get("generations", 500)
@@ -192,7 +183,7 @@ def run_nsga2(master_graph: nx.Graph, config: Dict[str, Any],
         'final_gen': max_generations,   # last evaluated generation
     }
 
-    Candidate.mutation_probability = config.get('mutation_probability', 0.7)
+    mutation_probability = config.get('mutation_probability', 0.7)
 
     print("Starting NSGA-II. Running for {} generations with a population of {}.".format(max_generations, pop_size))
     parents = make_adam_and_eve(master_graph, pop_size)
@@ -200,23 +191,21 @@ def run_nsga2(master_graph: nx.Graph, config: Dict[str, Any],
 
     for gen in tqdm(range(1, max_generations + 1), desc="Evolving..."):
         try:
-            raw_offspring = make_children(parents)
+            raw_offspring = make_children(parents, mutation_probability)
             if optimize and ((gen + 1) % optimization_interval == 0):
                 offspring = _optimize_children(raw_offspring, multiprocess=multiprocess)
             else:
                 offspring = raw_offspring
 
-            new_parents, frontiers = evaluate_generation(parents, offspring)
+            parents, frontiers = evaluate_generation(parents, offspring)
 
             _data_output['pareto_per_gen'] += frontiers[0]
-            if len(set(new_parents)) == 1:
+            if len(set(parents)) == 1:
                 _data_output['final_gen'] = gen
                 if config.get('early_break', False):
                     break
 
-            parents = new_parents
-            Candidate.mutation_probability *= 0.99
-
+            mutation_probability *= 0.99
         except KeyboardInterrupt:
             print("Interrupted; quitting after {} generations.".format(gen))
             _data_output['final_gen'] = gen

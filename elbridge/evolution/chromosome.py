@@ -94,7 +94,7 @@ class Chromosome:
     def __repr__(self):
         return repr(self._assignment)
 
-    def _score_format(self) -> str:
+    def score_format(self) -> str:
         return "; ".join([
             "{}: {}/{}".format(str(Chromosome.objectives[idx]), score, Chromosome.objectives[idx].goal_value)
             for idx, score in enumerate(self._scores)
@@ -110,7 +110,7 @@ class Chromosome:
             print("Component {}".format(i))
             print("Total population: {}\n".format(sum([data.get('pop') for _, data in component.nodes(data=True)])))
 
-        plot_shapes(shapes, title=self._score_format(), random_color=True)
+        plot_shapes(shapes, title=self.score_format(), random_color=True)
 
     def plot_graph(self):
         graph = nx.Graph(self._graph)
@@ -120,7 +120,7 @@ class Chromosome:
                 graph.remove_edge(i, j)
 
         nx.draw_networkx(graph, pos={v: v for v in graph}, labels={v: "{} {}".format(v, self.get_component(v)) for v in graph})
-        plt.title(self._score_format())
+        plt.title(self.score_format())
         plt.show()
 
     @profile

@@ -1,7 +1,6 @@
 """Various utility classes and methods."""
-import functools
 import os
-from typing import List, Set, Dict
+from typing import List, Set
 
 from networkx import Graph
 

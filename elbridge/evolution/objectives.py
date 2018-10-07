@@ -3,8 +3,6 @@ chromosomes have higher values."""
 
 from typing import Dict, List
 
-from networkx import Graph
-
 from elbridge.evolution.chromosome import Chromosome
 
 DISTRICTS = 10
@@ -41,7 +39,7 @@ class PopulationEquality(ObjectiveFunction):
         """
         Returns the score of the given components.
         """
-        component_scores: Dict[int, Dict[str, float]] = chromosome.get_component_scores().values()
+        component_scores: List[Dict[str, float]] = chromosome.get_component_scores().values()
 
         min_pop = float('inf')
         max_pop = float('-inf')

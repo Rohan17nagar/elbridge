@@ -76,15 +76,25 @@ class SearchLoadTest(TestCase):
         self.assertEqual(new_chromosome.get_assignment(), [1, 1] + list(range(2, size)))
 
     def test_optimize_moderately_complex(self):
-        grid_size = [20, 20]
+        grid_size = [32, 32]
         node_count = grid_size[0] * grid_size[1]
         edge_count = (grid_size[0] - 1) * grid_size[1] + grid_size[0] * (grid_size[1] - 1)
 
+        districts = 2
+        assignment = random.choices(range(1, districts + 1), k=node_count)
+
         master_graph = nx.grid_graph(grid_size)
         nx.set_node_attributes(master_graph, {i: 1 for i in master_graph}, name='pop')
-        Chromosome.objectives = [PopulationEquality(master_graph, districts=2)]
-        chromosome = Chromosome(master_graph, random.choices([1, 2], k=node_count))
+        Chromosome.objectives = [PopulationEquality(master_graph, districts=districts)]
+        chromosome = Chromosome(master_graph, assignment)
 
         best_state = optimize(chromosome, sample_size=edge_count * 2)
+        print("Original scores: {}".format(chromosome.get_scores()))
+        print("Final scores: {}".format(best_state.get_scores()))
         self.assertTrue(best_state.dominates(chromosome))
+
+        better_state = optimize(best_state, sample_size=edge_count * 2)
+        best_state.normalize()
+        better_state.normalize()
+        self.assertEqual(best_state, better_state)
 
