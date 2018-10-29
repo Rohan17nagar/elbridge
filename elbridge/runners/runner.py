@@ -5,7 +5,7 @@ from elbridge.runners import evaluation
 from elbridge.utilities.utils import cd
 
 
-def create_graphs(data_dir, configs):
+def create_graphs(data_dir, configs, districts):
     with cd(data_dir):
         county_graph = shape.create_county_graph(configs.get('county'))
         annotater.initialize_county_graph(
@@ -20,12 +20,14 @@ def create_graphs(data_dir, configs):
 
         print("Finished reading in all graphs. Leaving data directory.")
 
+    county_graph['graph']['districts'] = block_group_graph['graph']['districts'] = districts
+
     return nx.freeze(county_graph), nx.freeze(block_group_graph)
 
 
-def evaluate(data_dir, configs, reload_only):
+def evaluate(data_dir, configs, districts, reload_only):
     """Main function."""
-    county_graph, block_group_graph = create_graphs(data_dir, configs)
+    county_graph, block_group_graph = create_graphs(data_dir, configs, districts)
 
     if reload_only:
         return

@@ -1,24 +1,22 @@
-# pylint: disable=C0103
 """Genetic algorithm stuff."""
 
 import functools
 import random
 from multiprocessing.pool import ThreadPool as TPool
-from typing import List, Tuple, Any, Dict
+from typing import List, Tuple
 
 import networkx as nx
 from tqdm import tqdm
 
 from elbridge.evolution.candidate import Candidate
 from elbridge.evolution.chromosome import Chromosome
-from elbridge.evolution.objectives import ObjectiveFunction, DISTRICTS
+from elbridge.evolution.objectives import ObjectiveFunction
 
 # use this to mute tqdm
-tqdm = lambda x, *y, **z: x
+# tqdm = lambda x, *y, **z: x
 
 Population = List[Candidate]
 Frontier = List[Candidate]
-Parents = Tuple[Candidate, Candidate]
 
 
 def fast_non_dominated_sort(population: Population) -> List[Frontier]:
@@ -70,11 +68,10 @@ def crowding_distance_assignment(frontier: Frontier):
         frontier[0].distance = float('inf')
         frontier[-1].distance = float('inf')
 
-        for i, _ in enumerate(frontier[1:-1]):
-            score_range = abs((frontier[i + 1].chromosome.get_scores()[idx]
-                               - frontier[i - 1].chromosome.get_scores()[idx]))
-            objective_range = obj_fn.max_value - obj_fn.min_value
-            frontier[i].distance += score_range / objective_range
+        objective_range = obj_fn.max_value - obj_fn.min_value
+        for i, elem in enumerate(frontier[1:-1]):
+            score_range = abs((frontier[i+1].chromosome.get_scores()[idx] - frontier[i-1].chromosome.get_scores()[idx]))
+            elem.distance += score_range / objective_range
 
 
 def crowding_operator(p: Candidate, q: Candidate) -> int:
@@ -92,8 +89,8 @@ def select_parent(population: Population, k: int = 3) -> Candidate:
 
 def make_children(parents: Population, mutation_probability: float) -> Population:
     """Take a parent population and return an equally-sized child population."""
-    children = []
-    for _ in tqdm(range(len(parents) // 2), desc="Making children"):
+    children = []  # type: Population
+    for _ in range(len(parents) // 2):
         parent_a, parent_b = (select_parent(parents), select_parent(parents))
         offspring = parent_a.crossover_and_mutate(parent_b, mutation_probability)
         children += offspring
@@ -101,115 +98,76 @@ def make_children(parents: Population, mutation_probability: float) -> Populatio
     return children
 
 
-def make_adam_and_eve(master_graph: nx.Graph, population_size: int) -> Population:
-    """Makes the first generation."""
-    return [
-        Candidate(Chromosome(master_graph, [random.randint(1, DISTRICTS) for _ in master_graph]))
-        for _ in range(population_size)
-    ]
+def optimize_children(raw_children: Population, multiprocess: bool = True) -> Population:
+    _optimize = lambda idx_child: idx_child[1].optimize(pos=idx_child[0])
 
-
-def _optimize(arg):
-    pos, c = arg
-    return c.optimize(pos=pos)
-
-
-def _optimize_children(raw_offspring: Population, multiprocess: bool = True) -> Population:
-    offspring = []
     if multiprocess:
         with TPool() as p:
-            for child in tqdm(
-                    p.imap_unordered(_optimize, enumerate(raw_offspring)), total=len(raw_offspring),
-                    desc="Optimizing children"
-            ):
-                offspring.append(child)
+            children = list(tqdm(
+                p.imap(_optimize, enumerate(raw_children)), total=len(raw_children), desc="Optimizing children"
+            ))
     else:
-        for idx_child in tqdm(enumerate(raw_offspring), desc="Optimizing children"):
-            offspring.append(_optimize(idx_child))
+        children = []
+        for idx, child in tqdm(enumerate(raw_children), total=len(raw_children), desc="Optimizing children"):
+            children.append(_optimize((idx, child)))
 
-    return offspring
-
-
-def _get_best_frontier(frontiers: List[Frontier]):
-    return set([tuple(cand.chromosome.get_scores()) for cand in frontiers[0]])
+    return children
 
 
-def evaluate_generation(parents: Population, offspring: Population) -> Tuple[Population, List[Frontier]]:
-    combined_population = parents + offspring
-    frontiers = fast_non_dominated_sort(combined_population)
+def evaluate_generation(parents: Population, children: Population) -> Tuple[Population, Frontier]:
+    combined_population: Population = parents + children
+    frontiers: List[Frontier] = fast_non_dominated_sort(combined_population)
 
     next_parents: Population = []
     remaining_slots = len(parents)
-    i = 0
 
-    while i < len(frontiers):
-        frontier = frontiers[i]
-
+    for frontier in frontiers:
         crowding_distance_assignment(frontier)
         next_parents += frontier
 
         remaining_slots -= len(frontier)
         if remaining_slots <= 0:
             break
-        i += 1
 
     next_parents.sort(key=functools.cmp_to_key(crowding_operator))
-
-    return next_parents[:len(parents)], frontiers
+    return next_parents[:len(parents)], frontiers[0]
 
 
 @profile
-def run_nsga2(master_graph: nx.Graph, config: Dict[str, Any], objective_fns: List[Tuple[ObjectiveFunction, dict]]):
-    """Runs NSGA-II."""
-    Chromosome.objectives = [cls(master_graph, **args) for cls, args in objective_fns]
+def run_nsga2(master_graph: nx.Graph, objective_fns: List[ObjectiveFunction],
+              max_generations: int = 500, pop_size: int = 300, multiprocess: bool = True,
+              optimize: bool = True, optimization_interval: int = 20,
+              mutation_probability: float = 0.7, mutation_degradation_rate: float = 0.9) -> Tuple[Frontier, dict]:
+    """
+    Run NSGA-II on a graph.
+    """
+    Chromosome.objectives = objective_fns
 
-    # how many generations to run for
-    max_generations: int = config.get("generations", 500)
-
-    # how many candidates to evaluate
-    pop_size: int = config.get("population_size", 300)
-
-    # whether to run in parallel
-    multiprocess: bool = config.get("multiprocess", True)
-
-    # whether to optimize
-    optimize: bool = config.get("optimize", True)
-
-    # how frequently (# of generations) candidates should be optimized
-    optimization_interval: int = config.get("optimization_interval", 20)
-
-    _data_output = {
-        'pareto_per_gen': [],           # best frontier in each generation
-        'final_gen': max_generations,   # last evaluated generation
-    }
-
-    mutation_probability = config.get('mutation_probability', 0.7)
-
-    print("Starting NSGA-II. Running for {} generations with a population of {}.".format(max_generations, pop_size))
-    parents = make_adam_and_eve(master_graph, pop_size)
-    frontiers = []
+    parents = [Candidate(Chromosome.generate(master_graph)) for _ in range(pop_size)]
+    pareto_frontier: Frontier = None
+    data_output = {}
 
     for gen in tqdm(range(1, max_generations + 1), desc="Evolving..."):
         try:
-            raw_offspring = make_children(parents, mutation_probability)
-            if optimize and ((gen + 1) % optimization_interval == 0):
-                offspring = _optimize_children(raw_offspring, multiprocess=multiprocess)
-            else:
-                offspring = raw_offspring
+            raw_children = make_children(parents, mutation_probability)
 
-            parents, frontiers = evaluate_generation(parents, offspring)
+            children = raw_children
+            if optimize and gen % optimization_interval == 0:
+                children = optimize_children(raw_children, multiprocess=multiprocess)
 
-            _data_output['pareto_per_gen'] += frontiers[0]
-            if len(set(parents)) == 1:
-                _data_output['final_gen'] = gen
-                if config.get('early_break', False):
-                    break
+            parents, pareto_frontier = evaluate_generation(parents, children)
 
-            mutation_probability *= 0.99
+            print("pareto frontier {}/{} (score {})".format(
+                len(pareto_frontier), 2 * len(parents), pareto_frontier[0].chromosome.get_scores())
+            )
+
+            data_output[gen] = {
+                'pareto_frontier': pareto_frontier,
+                'unique_parents': len(set(parents))
+            }
+
+            mutation_probability *= mutation_degradation_rate
         except KeyboardInterrupt:
-            print("Interrupted; quitting after {} generations.".format(gen))
-            _data_output['final_gen'] = gen
             break
 
-    print("Finished running NSGA-II. Best frontier:", _get_best_frontier(frontiers))
-    return frontiers[0], _data_output
+    return pareto_frontier, data_output

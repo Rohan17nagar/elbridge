@@ -116,12 +116,12 @@ def grid_2f(n):
 
 
 def evaluate_graph(graph, name, short_name, config):
-    obj_fns = [(objectives.PopulationEquality, {'key': 'pop'})]
+    obj_fns = [objectives.PopulationEquality(graph, key='pop')]
     stamp = int(time.time())
     filename = '{}_{}'.format(short_name, stamp)
     title = 'Best $B$-Values in {}'.format(name)
 
-    final_frontier, data = run_nsga2(graph, config=config, objective_fns=obj_fns)
+    final_frontier, data = run_nsga2(graph, obj_fns, **config)
 
     fronts = data.get('pareto_per_gen', [])
     gen_scores = []

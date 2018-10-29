@@ -7,6 +7,9 @@ from tqdm import tqdm
 
 from elbridge.evolution.chromosome import Chromosome
 
+# use this to mute tqdm
+tqdm = lambda x, *y, **z: x
+
 
 def find_best_neighbor_simple(state: Chromosome, sample_size: int = 100) -> Optional[Chromosome]:
     moves = state.get_hypotheticals().edges

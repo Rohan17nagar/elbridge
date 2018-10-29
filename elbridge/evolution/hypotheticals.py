@@ -22,21 +22,8 @@ class HypotheticalSet:
         i, j = edge
         return (i, j) in self.edges or (j, i) in self.edges
 
-    def __del__(self):
-        del self.edges
-
-    def copy(self):
-        return HypotheticalSet(self.edges.copy())
-
     def add_edge(self, edge: Edge):
         i, j = edge
         self.edges.add((i, j))
         if (j, i) not in self.edges:
             self.edges.add((j, i))
-
-    def remove_edge(self, edge: Edge):
-        i, j = edge
-        self.edges.remove((i, j))
-        self.edges.remove((j, i))
-
-

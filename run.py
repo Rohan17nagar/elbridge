@@ -110,4 +110,5 @@ if __name__ == "__main__":
     setup_logging(configs)
 
     data_directory = configs.get("data_directory", "/var/local/rohan")
-    evaluate(data_directory, get_config_dicts(configs), reload_only)
+    districts = configs.get('districts', 10)
+    evaluate(data_directory, get_config_dicts(configs), districts, reload_only)

@@ -1,6 +1,7 @@
 {
 	"data_directory": "/scratch/cluster/rohan",
 	"pickle_directory": "pickles",
+	"districts": 10,
 	"parameters": {
 		"mutation_probability": 0.7,
 		"generations": 2000,

@@ -1,6 +1,6 @@
 from collections import defaultdict
 from random import randint, randrange
-from typing import List, Dict, Optional, DefaultDict, TYPE_CHECKING
+from typing import List, Dict, Optional, DefaultDict, TYPE_CHECKING, Set
 
 import matplotlib.pyplot as plt
 from networkx import Graph, is_frozen, freeze, nx, connected_component_subgraphs
@@ -20,6 +20,8 @@ class Chromosome:
     Chromosome. Stores an (immutable) master graph.
     """
     objectives = []  # type: List[ObjectiveFunction]
+
+    __scores__ = ['total_pop', 'components']
 
     @profile
     def __init__(self, graph: Graph, assignment: List[int], components: Optional[DefaultDict[int, Component]] = None,
@@ -94,6 +96,13 @@ class Chromosome:
     def __repr__(self):
         return repr(self._assignment)
 
+    @classmethod
+    def generate(cls, master_graph):
+        districts = master_graph.graph['districts']
+        output = Chromosome(master_graph, [randint(1, districts) for _ in master_graph])
+        output.normalize()
+        return output
+
     def score_format(self) -> str:
         return "; ".join([
             "{}: {}/{}".format(str(Chromosome.objectives[idx]), score, Chromosome.objectives[idx].goal_value)
@@ -119,11 +128,13 @@ class Chromosome:
             if not self.in_same_component(i, j):
                 graph.remove_edge(i, j)
 
-        nx.draw_networkx(graph, pos={v: v for v in graph}, labels={v: "{} {}".format(v, self.get_component(v)) for v in graph})
+        nx.draw_networkx(
+            graph, pos={v: v for v in graph}, labels={v: "{} {}".format(v, self.get_component(v)) for v in graph}
+        )
+
         plt.title(self.score_format())
         plt.show()
 
-    @profile
     def normalize(self) -> None:
         # normalize the chromosome: [1, 2, 3, 5, 4] -> [1, 2, 3, 4, 5]
         mapping = {}  # old component -> normalized component
@@ -133,12 +144,16 @@ class Chromosome:
         normalized_components: Dict[int, Component] = defaultdict(set)
         normalized_component_scores: Dict[int, Dict[str, float]] = {}
 
+        changed = False
         for current_component in self._assignment:
             if current_component not in mapping:
+                if current_component != ind:
+                    changed = True
+
                 mapping[current_component] = ind
                 ind += 1
 
-        if all(cur_val == new_val for cur_val, new_val in mapping.items()):
+        if not changed:
             return
 
         for current_component in self._assignment:
@@ -186,9 +201,6 @@ class Chromosome:
     def get_scores(self) -> List[float]:
         return self._scores
 
-    def get_num_components(self) -> int:
-        return len(set(self._assignment))
-
     def dominates(self, other: 'Chromosome'):
         """Returns true if we dominate another chromosome."""
         return dominates(self._scores, other._scores)
@@ -213,7 +225,9 @@ class Chromosome:
         new_assignment = self._assignment[:]
         new_assignment[j_index] = i_cmp
 
-        components = {c: set(self._components[c]) for c in self._components}
+        components: DefaultDict[int, Set[Node]] = defaultdict(
+            set, {c: set(self._components[c]) for c in self._components}
+        )
         components[j_cmp].remove(j)
         components[i_cmp].add(j)
 

@@ -17,10 +17,11 @@ class SearchTest(TestCase):
         nx.add_path(self.master_graph, [5, 6, 7])
         nx.add_path(self.master_graph, [2, 3, 4, 5])
         self.master_graph.graph['order'] = {i: i for i in range(8)}
+        self.master_graph.graph['districts'] = 2
         nx.set_node_attributes(self.master_graph, {i: 1 for i in self.master_graph}, name='pop')
         self.master_graph = nx.freeze(self.master_graph)
 
-        Chromosome.objectives = [PopulationEquality(self.master_graph, districts=2)]
+        Chromosome.objectives = [PopulationEquality(self.master_graph)]
 
         self.m_tqdm_patch = patch('elbridge.evolution.search.tqdm')
         self.m_tqdm = self.m_tqdm_patch.start()
@@ -33,7 +34,7 @@ class SearchTest(TestCase):
         master_graph = nx.path_graph(6)
         nx.set_node_attributes(master_graph, {i: 1 for i in master_graph}, name='pop')
         master_graph = nx.freeze(master_graph)
-        Chromosome.objectives = [PopulationEquality(master_graph, districts=2)]
+        Chromosome.objectives = [PopulationEquality(master_graph)]
 
         s1 = Chromosome(master_graph, [1, 1, 2, 2, 2, 2])
         s2 = find_best_neighbor(s1)
@@ -47,13 +48,18 @@ class SearchTest(TestCase):
     def test_optimize_simple(self):
         master_graph = nx.path_graph(6)
         nx.set_node_attributes(master_graph, {i: 1 for i in master_graph}, name='pop')
-        Chromosome.objectives = [PopulationEquality(master_graph, districts=2)]
+        Chromosome.objectives = [PopulationEquality(master_graph)]
 
         chromosome = Chromosome(master_graph, [1, 2, 2, 2, 2, 2])
         best_state = optimize(chromosome)
 
         self.assertEqual(best_state.get_scores(), [0.0])
         self.assertEqual(best_state.get_assignment(), [1, 1, 1, 2, 2, 2])
+
+        better_state = optimize(best_state)
+        best_state.normalize()
+        better_state.normalize()
+        self.assertEqual(best_state, better_state)
 
 
 class SearchLoadTest(TestCase):
@@ -64,10 +70,11 @@ class SearchLoadTest(TestCase):
         size = 1000
 
         master_graph = nx.path_graph(size)
-
         nx.set_node_attributes(master_graph, {i: 1 for i in range(2)}, name='pop')
         nx.set_node_attributes(master_graph, {i: 2 for i in range(2, size)}, name='pop')
-        Chromosome.objectives = [PopulationEquality(master_graph, districts=size - 1)]
+        master_graph.graph['districts'] = 2
+
+        Chromosome.objectives = [PopulationEquality(master_graph)]
         chromosome = Chromosome(master_graph, list(range(size)))
 
         new_chromosome = find_best_neighbor(chromosome, sample_size=size * 2)
@@ -85,16 +92,10 @@ class SearchLoadTest(TestCase):
 
         master_graph = nx.grid_graph(grid_size)
         nx.set_node_attributes(master_graph, {i: 1 for i in master_graph}, name='pop')
-        Chromosome.objectives = [PopulationEquality(master_graph, districts=districts)]
+        master_graph.graph['districts'] = districts
+
+        Chromosome.objectives = [PopulationEquality(master_graph)]
         chromosome = Chromosome(master_graph, assignment)
 
         best_state = optimize(chromosome, sample_size=edge_count * 2)
-        print("Original scores: {}".format(chromosome.get_scores()))
-        print("Final scores: {}".format(best_state.get_scores()))
         self.assertTrue(best_state.dominates(chromosome))
-
-        better_state = optimize(best_state, sample_size=edge_count * 2)
-        best_state.normalize()
-        better_state.normalize()
-        self.assertEqual(best_state, better_state)
-

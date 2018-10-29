@@ -1,5 +1,6 @@
 """Various utility classes and methods."""
 import os
+from pathlib import Path
 from typing import List, Set
 
 from networkx import Graph
@@ -8,16 +9,18 @@ from elbridge.utilities.types import Component, Node
 
 
 class cd:
-    # pylint: disable=invalid-name, too-few-public-methods
     """Context manager for changing the current working directory."""
 
     def __init__(self, new_path):
         """Point this to new_path."""
-        self.new_path = os.path.expanduser(new_path)
+        self.new_path = Path(new_path).expanduser()
         self.saved_path = None
 
     def __enter__(self):
-        self.saved_path = os.getcwd()
+        self.saved_path = Path.cwd()
+        if not self.new_path.exists():
+            self.new_path.mkdir(parents=True)
+
         os.chdir(self.new_path)
 
     def __exit__(self, etype, value, traceback):

@@ -1,5 +1,6 @@
 {
 	"data_directory": "/var/local/rohan",
+	"districts": 10,
 	"parameters": {
 		"mutation_probability": 0.7,
 		"generations": 500,

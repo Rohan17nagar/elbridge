@@ -5,24 +5,26 @@ import descartes
 import matplotlib.pyplot as plt
 import networkx as nx
 
+from elbridge.utilities.utils import cd
+
 
 def plot_graph(graph):
     """Plots a block graph."""
-    nx.draw_networkx(graph, pos={node: list(data.get('shape').centroid.coords)[0]
-                                 for node, data in graph.nodes(data=True)})
+    nx.draw_networkx(graph, pos={
+        node: list(data.get('shape').centroid.coords)[0] for node, data in graph.nodes(data=True)
+    })
+
     plt.show()
 
 
-def plot_shapes(objects, random_color=False, title="plot", save=False):
+def plot_shapes(objects, outdir="out/", random_color=False, title="plot"):
     """Plots shapely shapes."""
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
     # calculate plot bounds
-    min_x = float('inf')
-    min_y = float('inf')
-    max_x = float('-inf')
-    max_y = float('-inf')
+    min_x = min_y = float('inf')
+    max_x = max_y = float('-inf')
 
     for obj in objects:
         color = None
@@ -50,11 +52,10 @@ def plot_shapes(objects, random_color=False, title="plot", save=False):
     plt.title(title)
 
     ax.set_aspect(1)
-    if save:
-        plt.savefig('out/{}.png'.format(title))
 
-        os.chmod('out/{}.png'.format(title), 0o666)
+    if outdir:
+        with cd(outdir):
+            plt.savefig('plot.png')
+            os.chmod('plot.png', 0o666)
     else:
-        plt.show(fig)
-
-    plt.cla()
+        plt.show()
