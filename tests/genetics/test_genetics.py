@@ -67,6 +67,7 @@ class GeneticsLoadTest(TestCase):
                 continue
             gen_data = data[gen_id]
             random_pareto: Candidate = random.choice(gen_data.get('pareto_frontier'))
-            random_pareto.plot()
+            random_pareto.plot(save=True)
+            random_pareto.export()
 
         print("\n".join("{}".format(i.chromosome.get_component_scores()) for i in frontier))
