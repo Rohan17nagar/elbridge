@@ -58,8 +58,8 @@ class GeneticsLoadTest(TestCase):
         nx.set_node_attributes(master_graph, {(i, j): box(i, j, i+1, j+1) for (i, j) in master_graph}, name='shape')
 
         frontier, data = genetics.run_nsga2(
-            master_graph, [PopulationEquality(master_graph)], multiprocess=False, max_generations=100, pop_size=500,
-            optimize=False
+            master_graph, [PopulationEquality(master_graph)], multiprocess=True, max_generations=100, pop_size=500,
+            optimize=True
         )
 
         for gen_id in data:
