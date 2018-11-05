@@ -13,12 +13,28 @@ import networkx as nx
 from elbridge.utilities.utils import cd
 
 
-def plot_graph(graph):
+def plot_shape_graph(graph):
     """Plots a block graph."""
     nx.draw_networkx(graph, pos={
         node: list(data.get('shape').centroid.coords)[0] for node, data in graph.nodes(data=True)
     })
 
+    plt.show()
+
+
+def plot_graph(chromosome):
+    master_graph = chromosome.get_master_graph()
+    graph = nx.Graph(master_graph)
+
+    for i, j in master_graph.edges():
+        if not chromosome.in_same_component(i, j):
+            graph.remove_edge(i, j)
+
+    nx.draw_networkx(
+        graph, pos={v: v for v in graph}, labels={v: "{} {}".format(v, chromosome.get_component(v)) for v in graph}
+    )
+
+    plt.title(chromosome.score_format())
     plt.show()
 
 

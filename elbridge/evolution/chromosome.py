@@ -2,7 +2,6 @@ from collections import defaultdict
 from random import randint, randrange
 from typing import List, Dict, Optional, DefaultDict, TYPE_CHECKING, Set
 
-import matplotlib.pyplot as plt
 from networkx import Graph, is_frozen, freeze, nx, connected_component_subgraphs
 
 from elbridge.evolution.hypotheticals import HypotheticalSet
@@ -120,20 +119,6 @@ class Chromosome:
             print("Total population: {}\n".format(sum([data.get('pop') for _, data in component.nodes(data=True)])))
 
         plot_shapes(shapes, title=self.score_format(), random_color=True)
-
-    def plot_graph(self):
-        graph = nx.Graph(self._graph)
-
-        for i, j in self._graph.edges():
-            if not self.in_same_component(i, j):
-                graph.remove_edge(i, j)
-
-        nx.draw_networkx(
-            graph, pos={v: v for v in graph}, labels={v: "{} {}".format(v, self.get_component(v)) for v in graph}
-        )
-
-        plt.title(self.score_format())
-        plt.show()
 
     def normalize(self) -> None:
         # normalize the chromosome: [1, 2, 3, 5, 4] -> [1, 2, 3, 4, 5]
